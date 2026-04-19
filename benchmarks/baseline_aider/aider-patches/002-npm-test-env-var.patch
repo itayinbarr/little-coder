@@ -1,0 +1,18 @@
+diff --git a/benchmark/npm-test.sh b/benchmark/npm-test.sh
+index 0637300..4a3a3de 100755
+--- a/benchmark/npm-test.sh
++++ b/benchmark/npm-test.sh
+@@ -3,9 +3,10 @@
+ # exit when any command fails
+ set -e
+ 
+-# Create symlinks if they don't exist
+-[ ! -e node_modules ] && ln -s /npm-install/node_modules .
+-[ ! -e package-lock.json ] && ln -s /npm-install/package-lock.json .
++# NPM_INSTALL defaults to the docker layout at /npm-install; override for native runs.
++NPM_INSTALL="${NPM_INSTALL:-/npm-install}"
++[ ! -e node_modules ] && ln -s "$NPM_INSTALL/node_modules" .
++[ ! -e package-lock.json ] && ln -s "$NPM_INSTALL/package-lock.json" .
+ 
+ 
+ sed -i 's/\bxtest(/test(/g' *.spec.js

@@ -1,0 +1,3284 @@
+{
+  "model": "ollama/qwen3.5",
+  "started_at": "2026-04-16T00:55:20",
+  "updated_at": "2026-04-17T00:13:33",
+  "current": null,
+  "languages": {
+    "python": {
+      "total": 34,
+      "done": 34,
+      "pass_1": 15,
+      "pass_2": 3,
+      "fail": 16,
+      "details": [
+        {
+          "name": "affine-cipher",
+          "status": "pass_2",
+          "time": 154.7,
+          "tools": {
+            "Bash": 6,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 4
+          },
+          "write_refusals": 1,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "beer-song",
+          "status": "pass_1",
+          "time": 153.7,
+          "tools": {
+            "Bash": 4,
+            "Read": 3,
+            "Write": 1,
+            "Edit": 4
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "book-store",
+          "status": "fail",
+          "time": 887.0,
+          "tools": {
+            "Bash": 4,
+            "Read": 6,
+            "Write": 2,
+            "Edit": 7
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "E   AssertionError: 14440.0 != 14560"
+        },
+        {
+          "name": "bottle-song",
+          "status": "pass_1",
+          "time": 193.8,
+          "tools": {
+            "Bash": 5,
+            "Read": 3,
+            "Edit": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "bowling",
+          "status": "fail",
+          "time": 596.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 19,
+          "first_error": "E   Exception: Pin count exceeds pins on the lane"
+        },
+        {
+          "name": "connect",
+          "status": "fail",
+          "time": 903.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "E   AssertionError: '' != 'O'"
+        },
+        {
+          "name": "dominoes",
+          "status": "pass_1",
+          "time": 62.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "dot-dsl",
+          "status": "pass_1",
+          "time": 100.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "food-chain",
+          "status": "pass_1",
+          "time": 271.6,
+          "tools": {
+            "Bash": 4,
+            "Read": 3,
+            "Write": 1,
+            "Edit": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "forth",
+          "status": "fail",
+          "time": 674.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "go-counting",
+          "status": "pass_2",
+          "time": 353.5,
+          "tools": {
+            "Bash": 4,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 4
+          },
+          "write_refusals": 1,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "grade-school",
+          "status": "pass_1",
+          "time": 96.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "grep",
+          "status": "fail",
+          "time": 553.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": "E   AssertionError: '' != 'midsummer-night.txt:But I beseech your grace that I may know\\n'"
+        },
+        {
+          "name": "hangman",
+          "status": "fail",
+          "time": 421.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Edit": 9,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "E   AssertionError: 9 != 8"
+        },
+        {
+          "name": "list-ops",
+          "status": "pass_1",
+          "time": 54.6,
+          "tools": {
+            "Bash": 2,
+            "Read": 2,
+            "Edit": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "paasio",
+          "status": "fail",
+          "time": 935.2,
+          "tools": {
+            "Bash": 6,
+            "Read": 8,
+            "Edit": 7
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "raise AssertionError(msg)"
+        },
+        {
+          "name": "phone-number",
+          "status": "pass_1",
+          "time": 149.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "pig-latin",
+          "status": "pass_1",
+          "time": 132.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 1,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "poker",
+          "status": "fail",
+          "time": 407.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 9,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "E   IndexError: list index out of range"
+        },
+        {
+          "name": "pov",
+          "status": "fail",
+          "time": 731.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Edit": 6,
+            "Write": 2,
+            "Bash": 4
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "E   AssertionError: Lists differ: ['a', 'parent'] != ['a', 'parent', 'c']"
+        },
+        {
+          "name": "proverb",
+          "status": "pass_1",
+          "time": 39.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "react",
+          "status": "fail",
+          "time": 544.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Edit": 10,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "E   AssertionError: Lists differ: [3, 2] != []"
+        },
+        {
+          "name": "rest-api",
+          "status": "fail",
+          "time": 641.8,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Edit": 8
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "E   AssertionError: {'use[42 chars]y': {}, 'balance': 0}, {'name': 'Bob', 'owes':[130 chars].0}]} != {'use[42 chars]y': {'Bob': 3.0}, 'balance': 3.0}, {'name': "
+        },
+        {
+          "name": "robot-name",
+          "status": "pass_1",
+          "time": 53.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 7,
+          "first_error": ""
+        },
+        {
+          "name": "scale-generator",
+          "status": "fail",
+          "time": 531.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 8,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "E   AssertionError: Lists differ: ['F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E'] != ['F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'C', 'Db', 'D', 'E"
+        },
+        {
+          "name": "sgf-parsing",
+          "status": "fail",
+          "time": 722.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 2,
+            "Edit": 8,
+            "Bash": 3
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "E   AssertionError: <sgf_parsing.SgfTree object at 0x73af01694cd0> != <sgf_parsing.SgfTree object at 0x73af01615fd0>"
+        },
+        {
+          "name": "simple-linked-list",
+          "status": "pass_1",
+          "time": 144.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "transpose",
+          "status": "pass_1",
+          "time": 252.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 3,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "tree-building",
+          "status": "pass_1",
+          "time": 259.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "two-bucket",
+          "status": "fail",
+          "time": 675.7,
+          "tools": {
+            "Bash": 4,
+            "Read": 4,
+            "Edit": 11
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "E   AssertionError: Tuples differ: (1, 'two', 1) != (1, 'two', 0)"
+        },
+        {
+          "name": "variable-length-quantity",
+          "status": "pass_1",
+          "time": 80.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 7,
+          "first_error": ""
+        },
+        {
+          "name": "wordy",
+          "status": "fail",
+          "time": 528.6,
+          "tools": {
+            "Bash": 2,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 10
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "E   AssertionError: 'unknown operation' != 'syntax error'"
+        },
+        {
+          "name": "zebra-puzzle",
+          "status": "fail",
+          "time": 492.3,
+          "tools": {
+            "Bash": 6,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "E   AssertionError: None != 'Norwegian'"
+        },
+        {
+          "name": "zipper",
+          "status": "pass_2",
+          "time": 473.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 8,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        }
+      ]
+    },
+    "go": {
+      "total": 39,
+      "done": 39,
+      "pass_1": 11,
+      "pass_2": 4,
+      "fail": 24,
+      "details": [
+        {
+          "name": "alphametics",
+          "status": "fail",
+          "time": 515.0,
+          "tools": {
+            "Bash": 4,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestSolve (0.00s)"
+        },
+        {
+          "name": "beer-song",
+          "status": "pass_2",
+          "time": 177.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "book-store",
+          "status": "fail",
+          "time": 1035.9,
+          "tools": {
+            "Bash": 5,
+            "Read": 9,
+            "Write": 2,
+            "Edit": 7
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "--- FAIL: TestCost (0.00s)"
+        },
+        {
+          "name": "bottle-song",
+          "status": "pass_1",
+          "time": 145.6,
+          "tools": {
+            "Bash": 4,
+            "Read": 4,
+            "Edit": 2
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "bowling",
+          "status": "fail",
+          "time": 1070.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 9,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestRoll (0.00s)"
+        },
+        {
+          "name": "connect",
+          "status": "fail",
+          "time": 323.1,
+          "tools": {
+            "Bash": 4,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 8
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestResultOf (0.00s)"
+        },
+        {
+          "name": "counter",
+          "status": "fail",
+          "time": 414.3,
+          "tools": {
+            "Glob": 2,
+            "Read": 18,
+            "Edit": 3,
+            "Bash": 5,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\tcounter\t0.002s"
+        },
+        {
+          "name": "crypto-square",
+          "status": "pass_1",
+          "time": 318.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 3,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "dnd-character",
+          "status": "pass_1",
+          "time": 159.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "dominoes",
+          "status": "fail",
+          "time": 409.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\tdominoes [build failed]"
+        },
+        {
+          "name": "error-handling",
+          "status": "pass_1",
+          "time": 188.9,
+          "tools": {
+            "Bash": 6,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "food-chain",
+          "status": "pass_1",
+          "time": 159.4,
+          "tools": {
+            "Bash": 5,
+            "Read": 4,
+            "Edit": 4
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "forth",
+          "status": "fail",
+          "time": 572.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\tforth [build failed]"
+        },
+        {
+          "name": "hexadecimal",
+          "status": "pass_2",
+          "time": 343.9,
+          "tools": {
+            "Read": 6,
+            "Glob": 1,
+            "Edit": 8,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "kindergarten-garden",
+          "status": "fail",
+          "time": 233.3,
+          "tools": {
+            "Bash": 4,
+            "Read": 5,
+            "Edit": 6
+          },
+          "write_refusals": 0,
+          "turns": 15,
+          "first_error": "FAIL\tkindergarten [build failed]"
+        },
+        {
+          "name": "ledger",
+          "status": "fail",
+          "time": 386.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Bash": 4,
+            "Write": 1,
+            "Edit": 6
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestFormatLedgerSuccess (0.00s)"
+        },
+        {
+          "name": "markdown",
+          "status": "fail",
+          "time": 960.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 2,
+            "Edit": 9,
+            "Bash": 1
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "--- FAIL: TestMarkdown (0.00s)"
+        },
+        {
+          "name": "matrix",
+          "status": "pass_2",
+          "time": 277.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "octal",
+          "status": "pass_1",
+          "time": 88.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "paasio",
+          "status": "pass_2",
+          "time": 316.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 10,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "palindrome-products",
+          "status": "pass_1",
+          "time": 83.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "pig-latin",
+          "status": "fail",
+          "time": 568.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestPigLatin (0.00s)"
+        },
+        {
+          "name": "poker",
+          "status": "fail",
+          "time": 327.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Bash": 3,
+            "Write": 1,
+            "Edit": 9
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\tpoker [build failed]"
+        },
+        {
+          "name": "pov",
+          "status": "fail",
+          "time": 560.8,
+          "tools": {
+            "Bash": 3,
+            "Read": 7,
+            "Write": 2,
+            "Edit": 5
+          },
+          "write_refusals": 2,
+          "turns": 17,
+          "first_error": "--- FAIL: TestFromPov (0.00s)"
+        },
+        {
+          "name": "protein-translation",
+          "status": "pass_1",
+          "time": 143.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 4,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "react",
+          "status": "fail",
+          "time": 1115.3,
+          "tools": {
+            "Bash": 2,
+            "Read": 9,
+            "Write": 3,
+            "Edit": 6
+          },
+          "write_refusals": 3,
+          "turns": 20,
+          "first_error": "FAIL\treact [build failed]"
+        },
+        {
+          "name": "robot-simulator",
+          "status": "fail",
+          "time": 217.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 12,
+            "Write": 1,
+            "Edit": 4,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\trobot [build failed]"
+        },
+        {
+          "name": "say",
+          "status": "fail",
+          "time": 280.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestSay (0.00s)"
+        },
+        {
+          "name": "scale-generator",
+          "status": "fail",
+          "time": 807.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 10,
+            "Write": 2,
+            "Edit": 5,
+            "Bash": 4
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAIL\tscale [build failed]"
+        },
+        {
+          "name": "simple-linked-list",
+          "status": "pass_1",
+          "time": 114.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 1,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "sublist",
+          "status": "pass_1",
+          "time": 102.5,
+          "tools": {
+            "Bash": 4,
+            "Read": 4,
+            "Edit": 1
+          },
+          "write_refusals": 0,
+          "turns": 7,
+          "first_error": ""
+        },
+        {
+          "name": "transpose",
+          "status": "fail",
+          "time": 585.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 9,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "--- FAIL: TestTranspose (0.00s)"
+        },
+        {
+          "name": "tree-building",
+          "status": "fail",
+          "time": 212.7,
+          "tools": {
+            "Bash": 3,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 5
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": "--- FAIL: TestMakeTreeSuccess (0.00s)"
+        },
+        {
+          "name": "trinary",
+          "status": "pass_1",
+          "time": 223.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 4,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "two-bucket",
+          "status": "fail",
+          "time": 782.9,
+          "tools": {
+            "Bash": 5,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 8
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL\ttwobucket [build failed]"
+        },
+        {
+          "name": "variable-length-quantity",
+          "status": "fail",
+          "time": 340.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": "FAIL\tvariablelengthquantity\t28.704s"
+        },
+        {
+          "name": "word-search",
+          "status": "fail",
+          "time": 424.2,
+          "tools": {
+            "Bash": 5,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestSolve (0.00s)"
+        },
+        {
+          "name": "wordy",
+          "status": "fail",
+          "time": 553.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Edit": 5,
+            "Bash": 7
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "--- FAIL: TestAnswer (0.00s)"
+        },
+        {
+          "name": "zebra-puzzle",
+          "status": "fail",
+          "time": 1023.8,
+          "tools": {
+            "Bash": 4,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7,
+            "Glob": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "--- FAIL: TestSolvePuzzle (0.00s)"
+        }
+      ]
+    },
+    "rust": {
+      "total": 30,
+      "done": 30,
+      "pass_1": 7,
+      "pass_2": 2,
+      "fail": 21,
+      "details": [
+        {
+          "name": "accumulate",
+          "status": "pass_1",
+          "time": 85.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "acronym",
+          "status": "fail",
+          "time": 196.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 4,
+            "Bash": 8
+          },
+          "write_refusals": 0,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "alphametics",
+          "status": "fail",
+          "time": 215.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 6
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "book-store",
+          "status": "fail",
+          "time": 276.2,
+          "tools": {
+            "Bash": 11,
+            "Read": 6,
+            "Edit": 3
+          },
+          "write_refusals": 0,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "bowling",
+          "status": "fail",
+          "time": 383.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "decimal",
+          "status": "fail",
+          "time": 223.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "dot-dsl",
+          "status": "fail",
+          "time": 150.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 3,
+            "Bash": 2,
+            "TaskUpdate": 1
+          },
+          "write_refusals": 0,
+          "turns": 13,
+          "first_error": ""
+        },
+        {
+          "name": "doubly-linked-list",
+          "status": "fail",
+          "time": 975.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Write": 2,
+            "Edit": 1,
+            "Bash": 2
+          },
+          "write_refusals": 2,
+          "turns": 14,
+          "first_error": ""
+        },
+        {
+          "name": "fizzy",
+          "status": "fail",
+          "time": 322.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 10,
+            "Bash": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "forth",
+          "status": "fail",
+          "time": 849.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 2,
+            "Edit": 5
+          },
+          "write_refusals": 2,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "gigasecond",
+          "status": "pass_1",
+          "time": 50.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "grade-school",
+          "status": "pass_1",
+          "time": 80.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 1,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "grep",
+          "status": "fail",
+          "time": 247.5,
+          "tools": {
+            "Bash": 5,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 5
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "luhn-from",
+          "status": "fail",
+          "time": 190.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 6,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "macros",
+          "status": "pass_1",
+          "time": 228.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Edit": 3,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "nucleotide-codons",
+          "status": "fail",
+          "time": 339.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 9,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "ocr-numbers",
+          "status": "pass_1",
+          "time": 153.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "parallel-letter-frequency",
+          "status": "fail",
+          "time": 168.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 6
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "pig-latin",
+          "status": "pass_1",
+          "time": 183.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 6
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "poker",
+          "status": "fail",
+          "time": 419.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "react",
+          "status": "fail",
+          "time": 684.8,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Edit": 9
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "robot-name",
+          "status": "pass_1",
+          "time": 123.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "say",
+          "status": "fail",
+          "time": 474.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 8
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "scale-generator",
+          "status": "fail",
+          "time": 276.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 6
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "simple-cipher",
+          "status": "fail",
+          "time": 208.5,
+          "tools": {
+            "Bash": 8,
+            "Read": 5,
+            "Edit": 6
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "two-bucket",
+          "status": "fail",
+          "time": 437.5,
+          "tools": {
+            "Bash": 7,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 4
+          },
+          "write_refusals": 1,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "variable-length-quantity",
+          "status": "fail",
+          "time": 338.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 5,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "word-count",
+          "status": "pass_2",
+          "time": 300.6,
+          "tools": {
+            "Bash": 10,
+            "Read": 4,
+            "Edit": 6
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "wordy",
+          "status": "pass_2",
+          "time": 304.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Edit": 5,
+            "Bash": 7
+          },
+          "write_refusals": 0,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "xorcism",
+          "status": "fail",
+          "time": 275.5,
+          "tools": {
+            "Bash": 5,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 3
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": ""
+        }
+      ]
+    },
+    "javascript": {
+      "total": 49,
+      "done": 49,
+      "pass_1": 19,
+      "pass_2": 3,
+      "fail": 27,
+      "details": [
+        {
+          "name": "affine-cipher",
+          "status": "pass_1",
+          "time": 185.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "alphametics",
+          "status": "pass_1",
+          "time": 160.5,
+          "tools": {
+            "Bash": 5,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 2
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "beer-song",
+          "status": "fail",
+          "time": 209.4,
+          "tools": {
+            "Bash": 4,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 4
+          },
+          "write_refusals": 1,
+          "turns": 18,
+          "first_error": "FAIL ./beer-song.spec.js"
+        },
+        {
+          "name": "binary",
+          "status": "pass_1",
+          "time": 96.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "book-store",
+          "status": "fail",
+          "time": 410.0,
+          "tools": {
+            "Glob": 1,
+            "Bash": 4,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./book-store.spec.js"
+        },
+        {
+          "name": "bottle-song",
+          "status": "fail",
+          "time": 299.3,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Edit": 6
+          },
+          "write_refusals": 0,
+          "turns": 19,
+          "first_error": "FAIL ./bottle-song.spec.js"
+        },
+        {
+          "name": "bowling",
+          "status": "fail",
+          "time": 618.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 2,
+            "Edit": 4,
+            "Bash": 6
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAIL ./bowling.spec.js"
+        },
+        {
+          "name": "complex-numbers",
+          "status": "fail",
+          "time": 330.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": "FAIL ./complex-numbers.spec.js"
+        },
+        {
+          "name": "connect",
+          "status": "fail",
+          "time": 769.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./connect.spec.js"
+        },
+        {
+          "name": "food-chain",
+          "status": "fail",
+          "time": 611.1,
+          "tools": {
+            "Bash": 6,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 6
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./food-chain.spec.js"
+        },
+        {
+          "name": "forth",
+          "status": "fail",
+          "time": 558.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./forth.spec.js"
+        },
+        {
+          "name": "go-counting",
+          "status": "fail",
+          "time": 1161.1,
+          "tools": {
+            "Bash": 4,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 6
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./go-counting.spec.js"
+        },
+        {
+          "name": "grade-school",
+          "status": "pass_1",
+          "time": 114.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "grep",
+          "status": "pass_1",
+          "time": 223.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 4,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "house",
+          "status": "fail",
+          "time": 385.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 6,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 17,
+          "first_error": "FAIL ./house.spec.js"
+        },
+        {
+          "name": "killer-sudoku-helper",
+          "status": "pass_1",
+          "time": 177.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "ledger",
+          "status": "fail",
+          "time": 446.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Bash": 4,
+            "Write": 1,
+            "Edit": 8
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./ledger.spec.js"
+        },
+        {
+          "name": "list-ops",
+          "status": "pass_1",
+          "time": 219.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 4,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "meetup",
+          "status": "fail",
+          "time": 694.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 7,
+            "Bash": 4,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./meetup.spec.js"
+        },
+        {
+          "name": "ocr-numbers",
+          "status": "fail",
+          "time": 888.1,
+          "tools": {
+            "Bash": 6,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 8
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./ocr-numbers.spec.js"
+        },
+        {
+          "name": "palindrome-products",
+          "status": "pass_1",
+          "time": 128.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "parallel-letter-frequency",
+          "status": "pass_1",
+          "time": 97.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "phone-number",
+          "status": "pass_1",
+          "time": 222.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 4,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "pig-latin",
+          "status": "pass_1",
+          "time": 258.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "poker",
+          "status": "fail",
+          "time": 981.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./poker.spec.js"
+        },
+        {
+          "name": "promises",
+          "status": "fail",
+          "time": 401.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 10,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAIL ./promises.spec.js"
+        },
+        {
+          "name": "queen-attack",
+          "status": "pass_1",
+          "time": 238.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 2,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "rational-numbers",
+          "status": "fail",
+          "time": 648.1,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Edit": 9
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAIL ./rational-numbers.spec.js"
+        },
+        {
+          "name": "react",
+          "status": "fail",
+          "time": 217.8,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./react.spec.js"
+        },
+        {
+          "name": "rectangles",
+          "status": "pass_2",
+          "time": 617.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 5,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "resistor-color-trio",
+          "status": "pass_1",
+          "time": 192.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 5,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "rest-api",
+          "status": "fail",
+          "time": 807.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 8,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./rest-api.spec.js"
+        },
+        {
+          "name": "robot-name",
+          "status": "pass_1",
+          "time": 112.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "say",
+          "status": "pass_1",
+          "time": 164.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 2,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "scale-generator",
+          "status": "fail",
+          "time": 681.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./scale-generator.spec.js"
+        },
+        {
+          "name": "simple-linked-list",
+          "status": "pass_2",
+          "time": 244.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "space-age",
+          "status": "pass_1",
+          "time": 79.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "state-of-tic-tac-toe",
+          "status": "pass_1",
+          "time": 190.6,
+          "tools": {
+            "Bash": 5,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 2
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "sum-of-multiples",
+          "status": "pass_1",
+          "time": 68.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "tournament",
+          "status": "fail",
+          "time": 477.7,
+          "tools": {
+            "Bash": 8,
+            "Read": 5,
+            "Edit": 4,
+            "Glob": 1
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAIL ./tournament.spec.js"
+        },
+        {
+          "name": "transpose",
+          "status": "fail",
+          "time": 291.6,
+          "tools": {
+            "Bash": 5,
+            "Read": 5,
+            "Edit": 4
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": "FAIL ./transpose.spec.js"
+        },
+        {
+          "name": "triangle",
+          "status": "pass_1",
+          "time": 78.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 1,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "twelve-days",
+          "status": "fail",
+          "time": 247.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 4,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 16,
+          "first_error": "FAIL ./twelve-days.spec.js"
+        },
+        {
+          "name": "two-bucket",
+          "status": "fail",
+          "time": 677.6,
+          "tools": {
+            "Bash": 7,
+            "Read": 6,
+            "Edit": 4,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./two-bucket.spec.js"
+        },
+        {
+          "name": "variable-length-quantity",
+          "status": "fail",
+          "time": 653.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./variable-length-quantity.spec.js"
+        },
+        {
+          "name": "word-search",
+          "status": "pass_2",
+          "time": 192.2,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 3
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "wordy",
+          "status": "fail",
+          "time": 351.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 4,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 15,
+          "first_error": "FAIL ./wordy.spec.js"
+        },
+        {
+          "name": "zebra-puzzle",
+          "status": "fail",
+          "time": 679.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./zebra-puzzle.spec.js (7.991 s)"
+        },
+        {
+          "name": "zipper",
+          "status": "fail",
+          "time": 653.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAIL ./zipper.spec.js"
+        }
+      ]
+    },
+    "cpp": {
+      "total": 26,
+      "done": 26,
+      "pass_1": 10,
+      "pass_2": 3,
+      "fail": 13,
+      "details": [
+        {
+          "name": "all-your-base",
+          "status": "pass_1",
+          "time": 104.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 2,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "allergies",
+          "status": "pass_2",
+          "time": 192.1,
+          "tools": {
+            "Glob": 1,
+            "Bash": 3,
+            "Read": 6,
+            "Edit": 7,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "bank-account",
+          "status": "fail",
+          "time": 183.1,
+          "tools": {
+            "Bash": 3,
+            "Read": 5,
+            "Edit": 8
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "binary-search-tree",
+          "status": "fail",
+          "time": 277.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "circular-buffer",
+          "status": "pass_1",
+          "time": 287.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 3,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "clock",
+          "status": "fail",
+          "time": 157.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "complex-numbers",
+          "status": "pass_1",
+          "time": 167.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "crypto-square",
+          "status": "fail",
+          "time": 213.6,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "diamond",
+          "status": "fail",
+          "time": 341.5,
+          "tools": {
+            "Bash": 4,
+            "Read": 6,
+            "Edit": 6
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": "E       E                     \", \"                    F         F"
+        },
+        {
+          "name": "dnd-character",
+          "status": "pass_2",
+          "time": 282.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 19,
+          "first_error": ""
+        },
+        {
+          "name": "gigasecond",
+          "status": "fail",
+          "time": 97.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Edit": 2,
+            "Bash": 11
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "grade-school",
+          "status": "pass_1",
+          "time": 138.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 5,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "kindergarten-garden",
+          "status": "fail",
+          "time": 337.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 16,
+          "first_error": ""
+        },
+        {
+          "name": "knapsack",
+          "status": "pass_1",
+          "time": 102.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 3,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "linked-list",
+          "status": "pass_1",
+          "time": 172.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "meetup",
+          "status": "fail",
+          "time": 228.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 3,
+            "Bash": 10
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "parallel-letter-frequency",
+          "status": "pass_1",
+          "time": 137.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 3,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "perfect-numbers",
+          "status": "pass_1",
+          "time": 108.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 2,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "phone-number",
+          "status": "pass_1",
+          "time": 126.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 3,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "queen-attack",
+          "status": "pass_1",
+          "time": 93.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 2,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "robot-name",
+          "status": "fail",
+          "time": 229.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 8,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 18,
+          "first_error": ""
+        },
+        {
+          "name": "space-age",
+          "status": "fail",
+          "time": 152.9,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Edit": 3,
+            "Write": 2,
+            "Bash": 2
+          },
+          "write_refusals": 2,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "spiral-matrix",
+          "status": "fail",
+          "time": 315.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 9,
+            "Edit": 6,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "sublist",
+          "status": "fail",
+          "time": 170.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 7,
+            "Edit": 3,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 17,
+          "first_error": ""
+        },
+        {
+          "name": "yacht",
+          "status": "pass_2",
+          "time": 262.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 4,
+            "Bash": 9
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "zebra-puzzle",
+          "status": "fail",
+          "time": 903.8,
+          "tools": {
+            "Bash": 3,
+            "Read": 10,
+            "Edit": 2
+          },
+          "write_refusals": 0,
+          "turns": 11,
+          "first_error": ""
+        }
+      ]
+    },
+    "java": {
+      "total": 47,
+      "done": 47,
+      "pass_1": 22,
+      "pass_2": 2,
+      "fail": 23,
+      "details": [
+        {
+          "name": "affine-cipher",
+          "status": "pass_1",
+          "time": 120.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "all-your-base",
+          "status": "pass_1",
+          "time": 71.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 7,
+          "first_error": ""
+        },
+        {
+          "name": "alphametics",
+          "status": "fail",
+          "time": 186.1,
+          "tools": {
+            "Bash": 4,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 6
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "bank-account",
+          "status": "pass_1",
+          "time": 60.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "book-store",
+          "status": "fail",
+          "time": 1173.6,
+          "tools": {
+            "Glob": 2,
+            "Read": 6,
+            "Write": 2,
+            "Edit": 7,
+            "Bash": 2
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "bottle-song",
+          "status": "pass_1",
+          "time": 183.7,
+          "tools": {
+            "Bash": 5,
+            "Read": 4,
+            "Edit": 3
+          },
+          "write_refusals": 0,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "bowling",
+          "status": "fail",
+          "time": 595.7,
+          "tools": {
+            "Glob": 2,
+            "Read": 6,
+            "Edit": 8,
+            "Bash": 4,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "change",
+          "status": "pass_1",
+          "time": 67.4,
+          "tools": {
+            "Bash": 3,
+            "Read": 2,
+            "Edit": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "circular-buffer",
+          "status": "pass_1",
+          "time": 108.2,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 4,
+            "Bash": 2,
+            "TaskUpdate": 1
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "connect",
+          "status": "fail",
+          "time": 843.2,
+          "tools": {
+            "Bash": 5,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 6
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "custom-set",
+          "status": "pass_2",
+          "time": 369.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 5,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "dominoes",
+          "status": "fail",
+          "time": 343.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 10,
+            "Edit": 6,
+            "Bash": 4,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "food-chain",
+          "status": "fail",
+          "time": 430.3,
+          "tools": {
+            "Bash": 6,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 6,
+            "Glob": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "forth",
+          "status": "fail",
+          "time": 374.2,
+          "tools": {
+            "Glob": 2,
+            "Read": 8,
+            "Edit": 9,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "go-counting",
+          "status": "pass_1",
+          "time": 190.5,
+          "tools": {
+            "Bash": 3,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1
+          },
+          "write_refusals": 1,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "hangman",
+          "status": "fail",
+          "time": 584.7,
+          "tools": {
+            "Bash": 3,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 17,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "house",
+          "status": "pass_1",
+          "time": 166.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 6,
+            "Bash": 3
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "kindergarten-garden",
+          "status": "pass_1",
+          "time": 94.4,
+          "tools": {
+            "Bash": 3,
+            "Read": 5,
+            "Write": 1,
+            "Edit": 1
+          },
+          "write_refusals": 1,
+          "turns": 9,
+          "first_error": ""
+        },
+        {
+          "name": "ledger",
+          "status": "pass_1",
+          "time": 370.5,
+          "tools": {
+            "Bash": 4,
+            "Read": 4,
+            "Edit": 2,
+            "Write": 1,
+            "TaskUpdate": 1
+          },
+          "write_refusals": 1,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "mazy-mice",
+          "status": "fail",
+          "time": 557.9,
+          "tools": {
+            "Glob": 2,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "ocr-numbers",
+          "status": "fail",
+          "time": 455.8,
+          "tools": {
+            "Glob": 2,
+            "Read": 8,
+            "Write": 1,
+            "Edit": 8,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "palindrome-products",
+          "status": "pass_1",
+          "time": 65.6,
+          "tools": {
+            "Bash": 2,
+            "Glob": 1,
+            "Read": 3,
+            "Edit": 1
+          },
+          "write_refusals": 0,
+          "turns": 6,
+          "first_error": ""
+        },
+        {
+          "name": "phone-number",
+          "status": "pass_1",
+          "time": 191.3,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 2,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "pig-latin",
+          "status": "pass_1",
+          "time": 549.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 4,
+            "Bash": 2
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "poker",
+          "status": "fail",
+          "time": 779.8,
+          "tools": {
+            "Glob": 2,
+            "Read": 9,
+            "Write": 1,
+            "Edit": 6,
+            "Bash": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "pov",
+          "status": "fail",
+          "time": 1410.5,
+          "tools": {
+            "Bash": 6,
+            "Read": 9,
+            "Edit": 3,
+            "Write": 3
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "protein-translation",
+          "status": "pass_1",
+          "time": 310.7,
+          "tools": {
+            "Bash": 4,
+            "Read": 4,
+            "Edit": 5
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "pythagorean-triplet",
+          "status": "pass_1",
+          "time": 378.8,
+          "tools": {
+            "Bash": 4,
+            "Read": 5,
+            "Write": 2,
+            "Edit": 2
+          },
+          "write_refusals": 2,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "queen-attack",
+          "status": "pass_1",
+          "time": 241.0,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 5,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "rational-numbers",
+          "status": "fail",
+          "time": 608.8,
+          "tools": {
+            "Glob": 2,
+            "Read": 7,
+            "Write": 1,
+            "Edit": 7,
+            "Bash": 2,
+            "Grep": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "react",
+          "status": "fail",
+          "time": 377.9,
+          "tools": {
+            "Bash": 6,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 7
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "resistor-color-trio",
+          "status": "pass_1",
+          "time": 77.7,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 2,
+            "Bash": 1
+          },
+          "write_refusals": 0,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "rest-api",
+          "status": "fail",
+          "time": 306.9,
+          "tools": {
+            "Bash": 6,
+            "Read": 11,
+            "Edit": 7
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "satellite",
+          "status": "fail",
+          "time": 477.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 11,
+            "Edit": 6,
+            "Bash": 6
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "series",
+          "status": "pass_1",
+          "time": 74.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 3,
+            "Write": 1,
+            "Edit": 1,
+            "Bash": 1
+          },
+          "write_refusals": 1,
+          "turns": 7,
+          "first_error": ""
+        },
+        {
+          "name": "sgf-parsing",
+          "status": "fail",
+          "time": 633.9,
+          "tools": {
+            "Bash": 5,
+            "Read": 11,
+            "Write": 2,
+            "Edit": 4
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "simple-linked-list",
+          "status": "fail",
+          "time": 208.2,
+          "tools": {
+            "Glob": 2,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 8,
+            "Bash": 4
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "state-of-tic-tac-toe",
+          "status": "pass_1",
+          "time": 121.7,
+          "tools": {
+            "Bash": 3,
+            "Read": 4,
+            "Write": 1,
+            "Edit": 1
+          },
+          "write_refusals": 1,
+          "turns": 8,
+          "first_error": ""
+        },
+        {
+          "name": "transpose",
+          "status": "fail",
+          "time": 697.4,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Edit": 8,
+            "Bash": 4,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "tree-building",
+          "status": "pass_1",
+          "time": 216.7,
+          "tools": {
+            "Bash": 5,
+            "Read": 8,
+            "Edit": 3,
+            "Write": 1
+          },
+          "write_refusals": 1,
+          "turns": 12,
+          "first_error": ""
+        },
+        {
+          "name": "twelve-days",
+          "status": "pass_2",
+          "time": 316.3,
+          "tools": {
+            "Bash": 9,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 5
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": ""
+        },
+        {
+          "name": "two-bucket",
+          "status": "fail",
+          "time": 1024.1,
+          "tools": {
+            "Glob": 1,
+            "Read": 5,
+            "Edit": 9,
+            "Bash": 5
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "variable-length-quantity",
+          "status": "fail",
+          "time": 721.8,
+          "tools": {
+            "Glob": 1,
+            "Read": 6,
+            "Write": 1,
+            "Edit": 9,
+            "Bash": 3
+          },
+          "write_refusals": 1,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "word-search",
+          "status": "pass_1",
+          "time": 196.7,
+          "tools": {
+            "Bash": 5,
+            "Read": 6,
+            "Edit": 2
+          },
+          "write_refusals": 0,
+          "turns": 11,
+          "first_error": ""
+        },
+        {
+          "name": "wordy",
+          "status": "pass_1",
+          "time": 299.5,
+          "tools": {
+            "Glob": 1,
+            "Read": 4,
+            "Edit": 3,
+            "Bash": 2
+          },
+          "write_refusals": 0,
+          "turns": 10,
+          "first_error": ""
+        },
+        {
+          "name": "zebra-puzzle",
+          "status": "fail",
+          "time": 1495.9,
+          "tools": {
+            "Bash": 2,
+            "Glob": 1,
+            "Read": 8,
+            "Write": 2,
+            "Edit": 7,
+            "Grep": 2
+          },
+          "write_refusals": 2,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        },
+        {
+          "name": "zipper",
+          "status": "fail",
+          "time": 750.4,
+          "tools": {
+            "Glob": 2,
+            "Read": 6,
+            "Edit": 8,
+            "Bash": 4
+          },
+          "write_refusals": 0,
+          "turns": 20,
+          "first_error": "FAILURE: Build failed with an exception."
+        }
+      ]
+    }
+  },
+  "overall": {
+    "total": 225,
+    "done": 225,
+    "passed": 101,
+    "pct": 44.89
+  }
+}

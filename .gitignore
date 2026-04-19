@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+debug_payload.json
+brainstorm_outputs/
+# Top-level `reference/` dev scratch dir only — NOT docs/reference/,
+# which ships the bundled knowledge base consulted by the reference_docs
+# skill entry. Pattern anchored with a leading slash to scope it to the
+# repo root.
+/reference/
+
+# Claude Code local state
+.claude/
+
+# Benchmark run artifacts (local debug output, can be large)
+benchmarks/full_polyglot_logs*/
+benchmarks/archived_contaminated_runs/
+benchmarks/priming_test_logs*/
+benchmarks/repro_logs/
+benchmarks/results.json.bak
+benchmarks/results_full_polyglot.json.tmp
+
+# Visual-asset generation workspace
+# Tape files, mock demo provider, canned response JSON, and scratch vhs
+# output all live under .vhs-work/. Only the finished assets/*.gif files
+# get committed to the repo — the generation code stays local so we
+# don't pollute little-coder's published surface with recording tooling.
+.vhs-work/

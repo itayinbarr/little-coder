@@ -1,0 +1,97 @@
+diff --git a/benchmark/benchmark.py b/benchmark/benchmark.py
+index cc694a9..5f72fe2 100755
+--- a/benchmark/benchmark.py
++++ b/benchmark/benchmark.py
+@@ -5,10 +5,27 @@ import os
+ import random
+ import re
+ import shutil
++import signal
+ import subprocess
+ import sys
+ import time
+ import traceback
++
++# Per-exercise wall-clock cap. Overridable via AIDER_PER_EXERCISE_CAP_SECONDS env var.
++# Applied via SIGALRM around run_test_real; on fire, the exercise is marked failed
++# with an exceeded_wall_cap marker and the benchmark moves on.
++_PER_EXERCISE_CAP_SECONDS = int(os.environ.get("AIDER_PER_EXERCISE_CAP_SECONDS", "3600"))
++
++
++class PerExerciseTimeout(BaseException):
++    """Inherits from BaseException so Aider/litellm's broad `except Exception:`
++    retry clauses cannot swallow it. Only our own `except PerExerciseTimeout`
++    in run_test() catches it."""
++    pass
++
++
++def _per_exercise_timeout_handler(signum, frame):
++    raise PerExerciseTimeout()
+ from collections import defaultdict
+ from json.decoder import JSONDecodeError
+ from pathlib import Path
+@@ -664,8 +681,36 @@ def get_replayed_content(replay_dname, test_dname):
+ 
+ 
+ def run_test(original_dname, testdir, *args, **kwargs):
++    start = time.time()
++    # Install per-exercise wall-clock cap (SIGALRM, single-threaded only).
++    prev_handler = signal.signal(signal.SIGALRM, _per_exercise_timeout_handler)
++    signal.alarm(_PER_EXERCISE_CAP_SECONDS)
+     try:
+         return run_test_real(original_dname, testdir, *args, **kwargs)
++    except PerExerciseTimeout:
++        elapsed = time.time() - start
++        print("=" * 40)
++        print(f"PER-EXERCISE CAP FIRED after {elapsed:.0f}s on {testdir}")
++        testdir = Path(testdir)
++        results_fname = testdir / ".aider.results.json"
++        results_fname.write_text(json.dumps({
++            "testdir": str(testdir),
++            "testcase": testdir.name,
++            "tests_outcomes": [False],
++            "exceeded_wall_cap": True,
++            "wall_cap_seconds": _PER_EXERCISE_CAP_SECONDS,
++            "duration": elapsed,
++            "cost": 0.0,
++            "num_error_outputs": 0,
++            "num_user_asks": 0,
++            "num_exhausted_context_windows": 0,
++            "num_malformed_responses": 0,
++            "syntax_errors": 0,
++            "indentation_errors": 0,
++            "lazy_comments": 0,
++            "test_timeouts": 0,
++            "note": f"Exercise wall-time exceeded {_PER_EXERCISE_CAP_SECONDS}s cap and was marked failed",
++        }, indent=2))
+     except Exception:
+         print("=" * 40)
+         print("Test failed")
+@@ -674,6 +719,9 @@ def run_test(original_dname, testdir, *args, **kwargs):
+         testdir = Path(testdir)
+         results_fname = testdir / ".aider.results.json"
+         results_fname.write_text(json.dumps(dict(exception=traceback.format_exc())))
++    finally:
++        signal.alarm(0)
++        signal.signal(signal.SIGALRM, prev_handler)
+ 
+ 
+ def run_test_real(
+@@ -981,13 +1029,14 @@ def run_test_real(
+ def run_unit_tests(original_dname, testdir, history_fname, test_files):
+     timeout = 60 * 3
+ 
+-    # Map of file extensions to test commands
++    # Resolve JS/C++ helper scripts relative to this file so native (non-docker) runs work.
++    _BENCH = Path(__file__).parent.resolve()
+     TEST_COMMANDS = {
+         ".py": ["pytest"],
+         ".rs": ["cargo", "test", "--", "--include-ignored"],
+         ".go": ["go", "test", "./..."],
+-        ".js": ["/aider/benchmark/npm-test.sh"],
+-        ".cpp": ["/aider/benchmark/cpp-test.sh"],
++        ".js": [str(_BENCH / "npm-test.sh")],
++        ".cpp": [str(_BENCH / "cpp-test.sh")],
+         ".java": ["./gradlew", "test"],
+     }
+ 

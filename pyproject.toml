@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "little-coder"
+version = "4.0.0"
+description = "little-coder: A Fast, Hackable Python AI Coding Assistant"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.30.0",
+    "httpx>=0.27.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+voice  = ["sounddevice"]
+vision = ["Pillow"]
+
+[project.scripts]
+little-coder = "little_coder:main"
+
+[tool.setuptools]
+py-modules = [
+    "little_coder",
+    "agent",
+    "cloudsave",
+    "compaction",
+    "config",
+    "context",
+    "providers",
+    "skills",
+    "subagent",
+    "tool_registry",
+    "tools",
+]
+packages = ["mcp", "memory", "multi_agent", "plugin", "skill", "task", "voice", "checkpoint"]

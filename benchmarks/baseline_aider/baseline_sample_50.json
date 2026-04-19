@@ -1,0 +1,326 @@
+{
+  "seed": 20260416,
+  "targets": {
+    "python": 9,
+    "go": 7,
+    "rust": 4,
+    "javascript": 11,
+    "cpp": 6,
+    "java": 13
+  },
+  "total": 50,
+  "languages": {
+    "python": [
+      {
+        "name": "dominoes",
+        "status": "pass_1",
+        "turns": 6,
+        "time": 62.7
+      },
+      {
+        "name": "food-chain",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 271.6
+      },
+      {
+        "name": "go-counting",
+        "status": "pass_2",
+        "turns": 18,
+        "time": 353.5
+      },
+      {
+        "name": "list-ops",
+        "status": "pass_1",
+        "turns": 6,
+        "time": 54.6
+      },
+      {
+        "name": "phone-number",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 149.5
+      },
+      {
+        "name": "proverb",
+        "status": "pass_1",
+        "turns": 6,
+        "time": 39.2
+      },
+      {
+        "name": "tree-building",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 259.9
+      },
+      {
+        "name": "variable-length-quantity",
+        "status": "pass_1",
+        "turns": 7,
+        "time": 80.5
+      },
+      {
+        "name": "zipper",
+        "status": "pass_2",
+        "turns": 20,
+        "time": 473.7
+      }
+    ],
+    "go": [
+      {
+        "name": "beer-song",
+        "status": "pass_2",
+        "turns": 16,
+        "time": 177.8
+      },
+      {
+        "name": "crypto-square",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 318.4
+      },
+      {
+        "name": "dnd-character",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 159.0
+      },
+      {
+        "name": "error-handling",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 188.9
+      },
+      {
+        "name": "food-chain",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 159.4
+      },
+      {
+        "name": "octal",
+        "status": "pass_1",
+        "turns": 9,
+        "time": 88.5
+      },
+      {
+        "name": "palindrome-products",
+        "status": "pass_1",
+        "turns": 8,
+        "time": 83.9
+      }
+    ],
+    "rust": [
+      {
+        "name": "accumulate",
+        "status": "pass_1",
+        "turns": 9,
+        "time": 85.5
+      },
+      {
+        "name": "grade-school",
+        "status": "pass_1",
+        "turns": 8,
+        "time": 80.3
+      },
+      {
+        "name": "pig-latin",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 183.0
+      },
+      {
+        "name": "robot-name",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 123.0
+      }
+    ],
+    "javascript": [
+      {
+        "name": "alphametics",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 160.5
+      },
+      {
+        "name": "grade-school",
+        "status": "pass_1",
+        "turns": 11,
+        "time": 114.9
+      },
+      {
+        "name": "palindrome-products",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 128.1
+      },
+      {
+        "name": "parallel-letter-frequency",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 97.8
+      },
+      {
+        "name": "phone-number",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 222.1
+      },
+      {
+        "name": "queen-attack",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 238.4
+      },
+      {
+        "name": "rectangles",
+        "status": "pass_2",
+        "turns": 18,
+        "time": 617.0
+      },
+      {
+        "name": "resistor-color-trio",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 192.3
+      },
+      {
+        "name": "robot-name",
+        "status": "pass_1",
+        "turns": 11,
+        "time": 112.0
+      },
+      {
+        "name": "space-age",
+        "status": "pass_1",
+        "turns": 9,
+        "time": 79.8
+      },
+      {
+        "name": "triangle",
+        "status": "pass_1",
+        "turns": 9,
+        "time": 78.4
+      }
+    ],
+    "cpp": [
+      {
+        "name": "all-your-base",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 104.7
+      },
+      {
+        "name": "allergies",
+        "status": "pass_2",
+        "turns": 19,
+        "time": 192.1
+      },
+      {
+        "name": "circular-buffer",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 287.3
+      },
+      {
+        "name": "grade-school",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 138.2
+      },
+      {
+        "name": "queen-attack",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 93.7
+      },
+      {
+        "name": "yacht",
+        "status": "pass_2",
+        "turns": 20,
+        "time": 262.7
+      }
+    ],
+    "java": [
+      {
+        "name": "affine-cipher",
+        "status": "pass_1",
+        "turns": 6,
+        "time": 120.0
+      },
+      {
+        "name": "custom-set",
+        "status": "pass_2",
+        "turns": 20,
+        "time": 369.4
+      },
+      {
+        "name": "house",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 166.8
+      },
+      {
+        "name": "kindergarten-garden",
+        "status": "pass_1",
+        "turns": 9,
+        "time": 94.4
+      },
+      {
+        "name": "ledger",
+        "status": "pass_1",
+        "turns": 11,
+        "time": 370.5
+      },
+      {
+        "name": "palindrome-products",
+        "status": "pass_1",
+        "turns": 6,
+        "time": 65.6
+      },
+      {
+        "name": "protein-translation",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 310.7
+      },
+      {
+        "name": "pythagorean-triplet",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 378.8
+      },
+      {
+        "name": "resistor-color-trio",
+        "status": "pass_1",
+        "turns": 8,
+        "time": 77.7
+      },
+      {
+        "name": "series",
+        "status": "pass_1",
+        "turns": 7,
+        "time": 74.8
+      },
+      {
+        "name": "state-of-tic-tac-toe",
+        "status": "pass_1",
+        "turns": 8,
+        "time": 121.7
+      },
+      {
+        "name": "tree-building",
+        "status": "pass_1",
+        "turns": 12,
+        "time": 216.7
+      },
+      {
+        "name": "wordy",
+        "status": "pass_1",
+        "turns": 10,
+        "time": 299.5
+      }
+    ]
+  }
+}

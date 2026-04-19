@@ -1,0 +1,20 @@
+# Large external git clones — reproducible via commands in aider-patches/README.md
+aider-src/
+polyglot-benchmark/
+
+# Derived trees (built deterministically from polyglot-benchmark + our sample files)
+phase1-tree/
+phase2-tree/
+filtered-polyglot-benchmark/
+verify-cap-tree/
+verify-cap-tmp/
+verify-tree/
+verify-tmp/
+
+# Python venv (reproducible via requirements)
+venv/
+
+# Shared npm modules (reproducible via npm install)
+npm-install/
+tmp.benchmarks/
+run_baseline.log*

@@ -1,0 +1,22 @@
+little-coder
+Copyright 2026 Itay Inbar
+
+Licensed under the Apache License, Version 2.0 (the "License"); see the
+accompanying LICENSE file for the full text.
+
+--------------------------------------------------------------------------
+Attribution to upstream project
+--------------------------------------------------------------------------
+
+This product is a derivative work based on CheetahClaws / ClawSpring
+(https://github.com/SafeRL-Lab/clawspring), Copyright SafeRL-Lab,
+licensed under the Apache License, Version 2.0.
+
+The upstream project provided the foundational agent architecture, tool
+system, multi-provider support, and REPL interface. little-coder has
+been substantially modified: skill-augmented tool use, domain-knowledge
+injection, workspace awareness, thinking-budget enforcement with
+reasoning reuse, the Write-vs-Edit tool invariant, a multi-language
+Aider Polyglot benchmark harness, per-model profiles for small local
+LLMs, and a complete UI refresh have been added. Many upstream features
+that did not fit the small-model focus have been removed.

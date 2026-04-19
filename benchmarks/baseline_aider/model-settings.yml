@@ -1,0 +1,15 @@
+# Aider model settings for the matched-context baseline.
+# The critical knob is num_ctx (passed to Ollama at inference time),
+# controlled via benchmark.py --num-ctx. This file only locks in
+# defaults so the run is reproducible and un-cached.
+- name: ollama_chat/qwen3.5
+  edit_format: whole
+  use_repo_map: false
+  lazy: false
+  examples_as_sys_msg: true
+  extra_params:
+    num_ctx: 32768
+    num_predict: 8192
+    timeout: 1800
+  cache_control: false
+  caches_by_default: false
