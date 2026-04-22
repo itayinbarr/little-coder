@@ -2,6 +2,25 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.1] — 2026-04-22
+
+### Changed
+- **Strip leftover `little-coder-pi` references.** The 0.1.0 cut had the working-name `little-coder-pi` leaking into a handful of cosmetic places. Everything now reads `little-coder`:
+  - `AGENTS.md` H1.
+  - `.pi/extensions/checkpoint/`: snapshot directory is now `~/.little-coder/checkpoints/<session>/` (was `~/.little-coder-pi/...`).
+  - `.pi/extensions/extra-tools/`: `webfetch` User-Agent is now `little-coder/0.1`.
+  - `.pi/extensions/browser/`: Playwright launcher User-Agent reads `Mozilla/5.0 (little-coder research agent)`.
+  - `.pi/extensions/hello/`: startup notify message.
+  - `benchmarks/tb_adapter/`: module docstring + per-task log filename (`little_coder.log`).
+  - `benchmarks/rpc_client.py`, `benchmarks/aider_polyglot.py`: module docstrings.
+  - `package-lock.json`: `name` field (package.json was already `little-coder`).
+- **Terminal-Bench adapter display name.** `LittleCoderAgent.name()` already returned `little-coder` in 0.1.0 (the leaderboard (agent × model) pair is unaffected), but the adapter class docstring and log filename now match.
+
+### Does not change
+- Behavior. 81 TypeScript tests + 4 Python tests still pass, `tsc --noEmit` clean.
+- Tool schemas, JSON protocol names, environment-variable names (`LITTLE_CODER_*`), or the whitepaper's mechanism contracts.
+- Any in-flight long-running job: the leaderboard TB run launched under 0.1.0 loaded its extension code at startup and continues writing to the old checkpoint path for its lifetime — cosmetic only, checkpoints are best-effort and independent of task results.
+
 ## [v0.1.0] — 2026-04-22
 
 ### Changed — architecture port to pi
