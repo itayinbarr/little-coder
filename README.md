@@ -4,7 +4,9 @@
 
 little-coder takes the architecture of a cloud-powered coding assistant and makes it work with 5–25 GB local models served via Ollama **or llama.cpp**, through skill-augmented tool use, domain-knowledge injection, workspace-aware context discovery, a Write-vs-Edit tool invariant, and a thinking-budget system that prevents reasoning models from hanging while preserving their partial insights.
 
-**Headline result:** `ollama/qwen3.5` (9.7B, 6.6 GB) + little-coder scores **45.56% mean** (across two full runs) on the full 225-exercise Aider Polyglot benchmark, running on a consumer laptop with no network calls. On the public leaderboard that sits above gpt-4.5-preview (44.9%) and gpt-oss-120b high (41.8%). A matched-model vanilla Aider baseline reaches 19.11%.
+**Headline result (v0.0.5):** `llamacpp/qwen3.6-35b-a3b` (Qwen3.6-35B-A3B MoE — 35B total / 3B active, Q4_K_M ~22 GB) + little-coder scores **78.67%** on the full 225-exercise Aider Polyglot benchmark, running on an 8 GB laptop GPU with no network calls. That places the agent well inside the public leaderboard's top-10 band. See [`docs/benchmark-qwen3.6-35b-a3b.md`](docs/benchmark-qwen3.6-35b-a3b.md) for the full breakdown.
+
+**Earlier baseline (v0.0.2):** `ollama/qwen3.5` (9.7B, 6.6 GB) + little-coder scored **45.56% mean** across two full runs — still above gpt-4.5-preview (44.9%) and gpt-oss-120b high (41.8%) on the public leaderboard. A matched-model vanilla Aider baseline reaches 19.11%.
 
 > **The full narrative — motivation, design, methodology, results, leaderboard comparison, integrity audit, and limitations — is in the white paper at https://itayinbarr.substack.com/p/honey-i-shrunk-the-coding-agent** This README is the quick tour: what it looks like, how to run it, and how the repo is laid out. For anything about *why* the design is the way it is or *what the numbers mean*, read the paper.
 
@@ -166,7 +168,8 @@ benchmarks/
 ## Further reading
 
 - **[`docs/whitepaper.md`](docs/whitepaper.md)** — the white paper. Motivation, design philosophy (*intern, not senior engineer*), methodology, full results, leaderboard comparison, integrity audit, limitations. **Start here.**
-- [`docs/benchmark-reproduction.md`](docs/benchmark-reproduction.md) — two-run reproduction report with per-language statistics, tool-use analysis, intervention metrics, and the runner-degradation investigation.
+- **[`docs/benchmark-qwen3.6-35b-a3b.md`](docs/benchmark-qwen3.6-35b-a3b.md)** — full write-up of the **78.67%** run with Qwen3.6-35B-A3B via llama.cpp: per-language breakdowns, fail-flip analysis against the Qwen3.5 baseline, hardware setup, cross-language persistent-failure analysis.
+- [`docs/benchmark-reproduction.md`](docs/benchmark-reproduction.md) — two-run reproduction report for the Qwen3.5 9B baseline: per-language statistics, tool-use analysis, intervention metrics, and the runner-degradation investigation.
 - [`docs/benchmark-baseline-aider.md`](docs/benchmark-baseline-aider.md) — vanilla Aider + Qwen3.5 baseline (19.1%) for scaffold-ablation comparison.
 - [`docs/architecture.md`](docs/architecture.md) — deep internals for contributors: module dependency graph, tool registry API, skill loader structure.
 
