@@ -4,6 +4,8 @@
 
 Frontier-coding-agent ergonomics for 5–25 GB models running on your own laptop GPU. Every small-model-specific adaptation the whitepaper found load-bearing — the Write-vs-Edit tool invariant, per-turn tool-skill injection, algorithm-cheat-sheet injection, thinking-budget cap, output-repair, quality monitor, per-benchmark profiles — ships as a pi extension.
 
+The research story behind all this — why scaffold–model fit matters, how a 9.7 B Qwen beat frontier entries on Aider Polyglot, and what the load-bearing mechanisms actually do — is written up on Substack: **[*Honey, I Shrunk the Coding Agent*](https://open.substack.com/pub/itayinbarr/p/honey-i-shrunk-the-coding-agent)**. Start there if you want the "why"; stay here for the "how".
+
 ## How it relates to pi
 
 [pi](https://pi.dev) is the minimal substrate — agent loop, multi-provider API, TUI, session tree, compaction, extension model. Four built-in tools (read / write / edit / bash) and a ~1000-token system prompt.
