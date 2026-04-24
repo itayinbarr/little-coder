@@ -27,6 +27,22 @@ All runs used a consumer laptop: i9-14900HX, 32 GB RAM, **8 GB VRAM** on RTX 507
 
 ---
 
+## Roadmap
+
+The near-term focus is **benchmarking**, not new features. The paper established that scaffold–model fit moves a 9.7 B model from 19 % to 45 % on Aider Polyglot. The open question is: **how wide is the impact radius?** Does the same set of adaptations — Write-vs-Edit invariant, per-turn skill injection, thinking-budget cap, output-repair, quality monitor — help on tasks that *aren't* self-contained coding exercises? What breaks? What compounds?
+
+The plan is to establish a wide baseline before any further scaffolding changes:
+
+1. **Aider Polyglot** — done. 45.56 % (paper, Qwen3.5-9B) and 78.67 % (v0.0.5, Qwen3.6-35B-A3B).
+2. **Terminal-Bench-Core v0.1.1** — done. 40.0 % (v0.1.4).
+3. **Terminal-Bench 2.0** — *in progress.* 89 tasks × 5 trials, leaderboard-valid submission pending the run's completion.
+4. **GAIA** — next. Research-heavy, multi-tool (Browser + Evidence), tests whether the evidence-before-answer protocol ports cleanly to a non-coding benchmark.
+5. **SWE-bench Verified** — after GAIA. Multi-file real-world patches; the longest-horizon test of whether the scaffolding generalizes past exercise-scale tasks.
+
+**After that baseline is in place**, the next phase starts: improvement experiments targeted at the specific failure patterns we've seen (thinking-budget / quality-monitor behavior on long-horizon tasks, deliberate.py-style parallel branches on failure, better shell-session recovery for interactive-process traps). No scaffold changes until the data says which ones are worth running.
+
+---
+
 ## Setup
 
 ### What you'll need

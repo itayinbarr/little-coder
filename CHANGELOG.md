@@ -2,6 +2,21 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.14] — 2026-04-24
+
+### Added — Roadmap section in README
+Adds a `## Roadmap` section to the README, positioned right after the benchmark-results table, explaining that the near-term focus is **benchmarking to map the impact radius** of the whitepaper's scaffolding — not new features. Sequenced as:
+
+1. Aider Polyglot — done (45.56 % → 78.67 %)
+2. Terminal-Bench-Core v0.1.1 — done (40.0 %)
+3. Terminal-Bench 2.0 — in progress
+4. GAIA — next (stresses the evidence-before-answer protocol on a non-coding benchmark)
+5. SWE-bench Verified — after GAIA (longest-horizon multi-file patch test)
+
+**Improvement experiments come after that baseline is in place**, targeting specific failure patterns the data will expose (thinking-budget behavior on long-horizon tasks, `deliberate.py`-style parallel branches on failure, interactive-process shell recovery).
+
+No code or benchmark-harness changes. `benchmarks/tb_runs/` and `benchmarks/harbor_runs/` remain gitignored — the in-flight TB 2.0 run is unaffected.
+
 ## [v0.1.13] — 2026-04-24
 
 ### Fixed — system prompt fidelity
