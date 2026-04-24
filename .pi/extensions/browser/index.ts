@@ -10,16 +10,25 @@ import { Type } from "@sinclair/typebox";
 
 const CHUNK_SIZE = 2048;
 
-// Inlined "Readability-lite": remove heavy structural nodes and collapse whitespace.
-const READABLE_JS = `
-() => {
-  const clone = document.body.cloneNode(true);
-  const drop = clone.querySelectorAll('script, style, noscript, iframe, nav, header, footer, aside, form');
-  drop.forEach(n => n.remove());
-  const text = (clone.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim();
+// Inlined "Readability-lite": remove heavy structural nodes and collapse
+// whitespace. Passed to page.evaluate as a real function (not a string) —
+// Playwright silently returns undefined when given a string function literal
+// like `"() => {...}"` because it evaluates to a function *value*, not an
+// invocation. `document` is only defined in the page context.
+function readablePageText(): string {
+  const doc = (globalThis as any).document;
+  const clone = doc.body.cloneNode(true);
+  const drop = clone.querySelectorAll(
+    "script, style, noscript, iframe, nav, header, footer, aside, form",
+  );
+  drop.forEach((n: any) => n.remove());
+  const text = (clone.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
   return text;
 }
-`;
+function fallbackPageText(): string {
+  const doc = (globalThis as any).document;
+  return doc.body ? doc.body.innerText : "";
+}
 
 interface BrowserSession {
   pw: any;
@@ -231,11 +240,9 @@ export default function (pi: ExtensionAPI) {
       if (sess.error) return errorResult(`Error: ${sess.error}`);
       try {
         if (!sess.extractCache.has("full")) {
-          let text: string = await sess.page.evaluate(READABLE_JS);
+          let text: string = await sess.page.evaluate(readablePageText);
           if (!text) {
-            text = await sess.page.evaluate(
-              "() => document.body ? document.body.innerText : ''",
-            );
+            text = await sess.page.evaluate(fallbackPageText);
           }
           sess.extractCache.set("full", text ?? "");
         }

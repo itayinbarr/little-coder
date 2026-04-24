@@ -2,6 +2,36 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.16] — 2026-04-24
+
+### Added — `browser-extract-retention` extension
+New extension at `.pi/extensions/browser-extract-retention/` prunes raw `BrowserExtract` tool-results from conversation history on every turn. Keeps the **2 most-recent** extractions raw (the model may still be deciding what to `EvidenceAdd`), replaces older ones with a compact placeholder:
+
+```
+[BrowserExtract tool-result pruned — N chars originally extracted]
+URL: https://…
+Evidence saved from this extraction: e1 (note1); e2 (note2). Use EvidenceGet <id> to recall any snippet.
+```
+
+The placeholder walks message history backward to find the originating `BrowserNavigate` call (so the URL is cited accurately) and cross-references the session's Evidence store to list any saved snippets from that URL. Hooks the `context` event — non-destructive, fires before each LLM call.
+
+**Why this matters.** On a GAIA trial reading several pages, the agent accumulates 20–40 KB of raw chunk text in context while separately distilling the relevant bits via `EvidenceAdd`. The raw text is redundant post-distillation and contaminates reasoning. The extension lets `BrowserExtract` behave like a working buffer that drains as evidence crystallizes — without dropping anything the model can still retrieve via `EvidenceGet`.
+
+Measured on real Wikipedia content (`en.wikipedia.org/wiki/GAIA`, 3 extracts): **28.4 % context reduction (2253 chars saved)** from pruning 1 of 3 extracts at retention = 2. Savings compound linearly with extract count.
+
+### Fixed — latent `page.evaluate` bug in `browser` extension
+`.pi/extensions/browser/index.ts` was passing the Readability extraction script to Playwright as a *string* containing `() => { ... }`. Playwright evaluates strings as JavaScript expressions; a function literal evaluates to a function *value*, not an invocation, and serializes to `undefined` across the page/Node boundary. Both the primary and fallback paths had this bug, which meant `BrowserExtract` was silently returning empty text against some pages (and partial text on others, depending on Playwright version / page structure).
+
+Replaced both `page.evaluate("() => {...}")` calls with real function references (`page.evaluate(readablePageText)`, `page.evaluate(fallbackPageText)`) so Playwright auto-invokes and the return value serializes correctly. Verified against real Wikipedia pages (Apollo_11, GAIA, Terminal_Bench) — all three now return > 2 KB of readable text.
+
+### Tests
+- `retention.test.ts` — 11 unit tests for `pruneMessages` + `buildPlaceholder` (URL walk-back, rank-from-end, already-pruned idempotency, evidence source matching, retain = 0 edge case, only-touches-BrowserExtract invariant).
+- `live-integration.test.ts` — 3 tests running Playwright against live Wikipedia: baseline chunking, 3-extract GAIA-style trial with evidence, context-size measurement.
+- Suite now **95 / 95 passing** (was 92 / 92); typecheck clean.
+
+### Not touched
+The in-flight TB 2.0 `k = 5` run (`tb2-leaderboard-k5-2026-04-24__00-34-46`, ~163 / 445 trials) continues on v0.1.15 — retention + browser fix apply only to future GAIA work, not to TB trials.
+
 ## [v0.1.15] — 2026-04-24
 
 ### Added — `llamacpp/qwen3.6-27b` registered for experimentation
