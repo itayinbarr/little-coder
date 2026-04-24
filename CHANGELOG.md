@@ -2,6 +2,21 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.15] — 2026-04-24
+
+### Added — `llamacpp/qwen3.6-27b` registered for experimentation
+Alibaba released Qwen3.6-27B (dense, 27 B params, 262 K ctx) on 2026-04-22 with claims of outperforming its own 397 B MoE flagship on agentic coding benchmarks. Added the model to the provider extension and settings.json so it's a one-flag switch for future experiments:
+
+- `.pi/extensions/llama-cpp-provider/index.ts` — registers `llamacpp/qwen3.6-27b` alongside the existing A3B and 9B entries.
+- `.pi/settings.json` — adds a `llamacpp/qwen3.6-27b` profile with the same `benchmark_overrides.terminal_bench` / `benchmark_overrides.gaia` shape as the A3B profile.
+
+**35 B-A3B remains the benchmarking target.** Empirical sweep on 8 GB VRAM: the 27 B dense topped out at **5 tok/s** (Q3_K_XL, `-ngl 26`) — only ~28 % faster than the 4 tok/s Q4 baseline, and ~7 × slower than the 35 B-A3B's 38 tok/s. The MoE architecture of the A3B (35 B total / 3 B active, experts in RAM via `--n-cpu-moe 999`) is what makes a 35 B model viable on a laptop 8 GB GPU; a dense 27 B can't match it without ≥ 24 GB VRAM. The 27 B entry stays registered for users on larger hardware (or for future quant experiments), but all in-flight and upcoming benchmark runs use `llamacpp/qwen3.6-35b-a3b`.
+
+### Operational note (not in git)
+The paused TB 2.0 `k=5` run (`tb2-leaderboard-k5-2026-04-24__00-34-46`) was resumed via `harbor job resume` against the A3B server after the model sweep concluded. 158 / 445 trials were already done; resumption picks up at trial 159. No trial data was discarded.
+
+No code change beyond the two file edits above. Tests unchanged.
+
 ## [v0.1.14] — 2026-04-24
 
 ### Added — Roadmap section in README
