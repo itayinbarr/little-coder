@@ -2,6 +2,46 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.20] — 2026-04-26
+
+### Changed — `AGENTS.md` deduplicated against pi's built-in system prompt
+Inspecting `node_modules/@mariozechner/pi-coding-agent/dist/core/system-prompt.js:83-99` revealed that pi's built-in system prompt is always present at runtime, with `AGENTS.md` appended underneath as `# Project Context / ## AGENTS.md`. The two stack — they are not alternatives.
+
+The v0.1.13-restored AGENTS.md (the full v0.0.5 SYSTEM_PROMPT_TEMPLATE revival) duplicated several things pi's base already covers, in different wording:
+
+| pi's base says | v0.1.13 AGENTS.md *also* said |
+|---|---|
+| `Available tools: read / bash / edit / write` + benchmark schemas | A full "Available Tools" section listing Read / Write / Edit / Bash / ShellSession / Glob / Grep / WebFetch / WebSearch + Browser / Evidence |
+| `Be concise in your responses` | "Be concise and direct. Lead with the answer." |
+| `Show file paths clearly when working with files` | "Always use absolute paths for file operations." |
+
+For small local models, redundant phrasings of the same rule act like distinct constraints — the model can over-fit to one wording or thrash between two. Empirically, the partial archived runs that used the *pre*-v0.1.13 simplified AGENTS.md trended higher on TB 2.0 (k=1: 36.84 % on 19/89 trials; k=5: 28.57 % on 104/445 trials) than the full-restore k=5 leaderboard run (23.82 % on 445/445). Sample sizes for the partial runs are noisy, but the direction is consistent enough to test on a like-for-like full 445-trial run.
+
+This release rewrites `AGENTS.md` as a **delta over pi's base** rather than a re-implementation of it. Kept (little-coder-specific):
+
+- Identity line (`You are little-coder, a coding agent specialized for small local language models.`)
+- `# Capabilities & Autonomy` (autonomous-agent framing pi doesn't include)
+- `# Runtime invariants` — Write-vs-Edit refusal invariant + Bash / ShellSession timeout guidance + benchmark-tool note (replaces the duplicative "Available Tools" section; keeps only the operational facts pi can't infer)
+- `# Approaching complex tasks` and `# Handling ambiguity` (the deliberate-not-deliberation framing)
+- `# Workspace discovery` (the spec-file/docs surface-once rule)
+- `# Per-turn context augmentation` (load-bearing — explains the `## Tool Usage Guidance` and `## Algorithm Reference` injected blocks; pi cannot describe extensions it doesn't know about)
+- `# Guidelines` — only items pi's base doesn't cover: prefer editing existing files, no unnecessary comments / docstrings / error handling, systematic multi-step work, conviction-not-deliberation + thinking-budget cap
+
+Dropped (already covered by pi's base):
+
+- The full Available Tools tool catalog (pi enumerates the available-tools section automatically with one-line snippets per tool)
+- "Be concise and direct. Lead with the answer." (pi: `Be concise in your responses`)
+- "Always use absolute paths for file operations." (pi: `Show file paths clearly`)
+- "When reading files before editing, use line numbers to be precise." (pi: `Show file paths clearly` + the Read tool already returns line-numbered output)
+- "If a task is unclear, ask for clarification before proceeding." (covered by the new `# Handling ambiguity` section)
+
+Net length: ~50 lines (full v0.1.13 restore) → **~38 lines** (this dedup) → vs ~11 lines (pre-v0.1.13 simplified). The dedup keeps every behavioral nudge unique to little-coder while cutting redundant framing.
+
+### Action: launching a full k=5 TB 2.0 run on the dedup'd prompt
+A fresh `tb2-leaderboard-k5-*` run is launched against `terminal-bench@2.0` immediately after this commit. Result is the like-for-like comparator to the v0.1.18 submission (23.82 %, full v0.0.5 restore prompt) on the *same* dataset / model / scaffold / k. If the dedup wins, it becomes the going-forward default and the leaderboard submission is updated. If the v0.1.18 prompt wins on the full 445, the v0.0.5 restore is vindicated and stays.
+
+No code, extension, or harness change in this release — only `AGENTS.md`. Tests unchanged.
+
 ## [v0.1.19] — 2026-04-26
 
 ### Updated — README to reflect the TB 2.0 leaderboard result
