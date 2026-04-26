@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.19] — 2026-04-26
+
+### Updated — README to reflect the TB 2.0 leaderboard result
+v0.1.18 recorded the submission in the changelog but left the README's benchmark table and Roadmap section still showing "in progress". This release fills both in:
+
+- Benchmark table row (was `v0.1.9+ — in progress … Result —`) → now points to v0.1.13 (the prompt-fidelity release whose state actually produced the run, per `agent_info.version` in the trial `result.json` files), shows the **23.82 %** headline, and links to PR #158.
+- Roadmap section item 3 (was "Terminal-Bench 2.0 — *in progress*") → now `done. 23.82 % … awaiting maintainer merge.`
+
+No behavioral or code change. Tests unchanged.
+
 ## [v0.1.18] — 2026-04-26
 
 ### Submitted — Terminal-Bench 2.0 leaderboard, PR #158
