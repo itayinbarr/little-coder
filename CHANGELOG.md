@@ -2,6 +2,35 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.21] — 2026-04-26
+
+### Restored — three operational rules dropped by the v0.1.20 dedup
+The v0.1.20 dedup audit classified three items in the v0.1.13-restored AGENTS.md as "covered by pi's base prompt" and dropped them. Closer inspection of pi's *actual* per-tool `promptSnippet` strings (`node_modules/@mariozechner/pi-coding-agent/dist/core/tools/*.js`) showed that classification was wrong — these three rules are **not in pi's base** and were uniquely contributing to the v0.1.18 prompt that produced **23.82 %** on the TB 2.0 leaderboard. Observation: present in the higher-baseline prompt; absent from pi. Restoring them is expected to recover the operational signal lost in the dedup.
+
+Restored:
+
+1. **Edit's `replace_all` fallback.** Pi's edit snippet stops at "exact text replacement" with no failure-mode handling. The Write/Edit Runtime invariant now spells out: "If `old_string` appears multiple times in the file, pass `replace_all: true` or add more surrounding context to make the match unique."
+2. **Read with line numbers before editing.** Pi's read snippet is just `Read file contents` — no instruction to *use* line numbers, even though pi's Read tool returns them. The link "line-number-precise reads → exact-match Edit" is little-coder-specific and was load-bearing for the v0.1.18 baseline.
+3. **Absolute paths for file operations.** Pi says nothing about path style; "Show file paths clearly" is about *output formatting*, not operational use of absolute paths. Restoring the explicit rule.
+
+Pi's actual tool snippets, for the record:
+
+| tool | pi's `promptSnippet` |
+|---|---|
+| `read` | `Read file contents` |
+| `write` | `Create or overwrite files` (note: **conflicts** with our refuse-on-exist invariant — flagged for a future fix in the provider extension, out of scope here) |
+| `edit` | `Make precise file edits with exact text replacement, including multiple disjoint edits in one call` |
+| `bash` | `Execute bash commands (ls, grep, find, etc.)` |
+| `grep` | `Search file contents for patterns (respects .gitignore)` |
+| `find` | `Find files by glob pattern (respects .gitignore)` |
+
+Net length: ~38 lines (v0.1.20 dedup) → **~40 lines** (this restore). The dedup wins from v0.1.20 are kept (no re-introduction of the duplicative `# Available Tools` section, the duplicated "Be concise" / "Show file paths clearly" guidelines, or the conflicting "ask for clarification" line); only the three pi-doesn't-cover rules come back.
+
+### Action: stopped the v0.1.20 run and relaunched as v0.1.21
+The `tb2-leaderboard-k5-v0.1.20-2026-04-26__11-57-55` run was killed at trial 21 / 445 (~4.7 % done, accuracy tracking the v0.1.18 baseline at 5/21 = 23.8 %). Per the same rule that v0.1.13 invoked when the prompt changed mid-run — *the leaderboard requires a consistent prompt across all 5 × 89 = 445 trials* — partial-with-old-prompt-plus-new-trials-with-new-prompt would not be submittable. The v0.1.20 partial run is moved to `archived-partial-runs/`. A fresh run starts immediately as `tb2-leaderboard-k5-v0.1.21-*`.
+
+No code, extension, or harness change in this release — only `AGENTS.md`. Tests unchanged.
+
 ## [v0.1.20] — 2026-04-26
 
 ### Changed — `AGENTS.md` deduplicated against pi's built-in system prompt

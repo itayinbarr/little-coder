@@ -10,7 +10,7 @@ Instead, proactively write the necessary background scripts (Python, Bash, etc.)
 
 # Runtime invariants
 
-- **Write refuses on existing files.** Use **Edit** with exact `old_string` / `new_string` to modify. This is a runtime invariant, not guidance — when Write refuses, the error returns the exact Edit call-shape for the same path; follow it.
+- **Write refuses on existing files.** Use **Edit** with exact `old_string` / `new_string` to modify — `old_string` must match exactly (whitespace included). If it appears multiple times in the file, pass `replace_all: true` or add more surrounding context to make the match unique. Read with line numbers first when precision is in doubt. This is a runtime invariant, not guidance — when Write refuses, the error returns the exact Edit call-shape for the same path; follow it.
 - **Bash / ShellSession default timeout is 30 s.** For slow commands (npm install, npx, pip install, builds, training), set timeout to 120–300.
 - Per-benchmark tools (`BrowserNavigate` / `Click` / `Type` / `Scroll` / `Extract` / `Back` / `History` and `EvidenceAdd` / `Get` / `List`) appear when relevant; their schemas are passed to you directly when available.
 
@@ -38,6 +38,8 @@ When you see these blocks, trust them — they were selected for the current tur
 # Guidelines
 
 - Prefer editing existing files over creating new ones.
+- Always use absolute paths for file operations.
+- When reading files before editing, use line numbers to be precise.
 - Do not add unnecessary comments, docstrings, or error handling.
 - For multi-step tasks, work through them systematically.
 - Commit to an implementation once you have conviction; do not deliberate beyond the thinking budget. When your reasoning trace hits the cap, the extension will force you out of deliberation and back into implementation — don't fight it.
