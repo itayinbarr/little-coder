@@ -20,6 +20,7 @@ If you've never used pi, it's useful to skim [pi.dev](https://pi.dev) first — 
 | [**v0.0.5**](https://github.com/itayinbarr/little-coder/releases/tag/v0.0.5) — pre-pi Python | Qwen3.6-35B-A3B via llama.cpp | Aider Polyglot | **78.67 %**. [Full narrative](docs/benchmark-qwen3.6-35b-a3b.md). |
 | [**v0.1.4**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.4) — on pi | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench-Core v0.1.1 (80 tasks) | **40.0 %** in 6 h 50 min. [Write-up](docs/benchmark-terminal-bench-v0.1.1.md). |
 | [**v0.1.13**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.13) — on pi, TB 2.0 leaderboard | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **23.82 %** (106 / 445). [PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158) — awaiting maintainer merge. |
+| [**v0.1.24**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.24) — on pi, TB 2.0, smaller model — *in progress* | Qwen3.5-9B via llama.cpp (5.3 GB on GPU, 2× faster per-token than the 35B-A3B) | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **~15.5 %** at 251 / 445; tracking ~8 pp below the 35B-A3B baseline. Will be submitted to the leaderboard as a separate entry on completion. |
 
 All runs used a consumer laptop: i9-14900HX, 32 GB RAM, **8 GB VRAM** on RTX 5070 Laptop (Blackwell). No cloud inference at any point.
 
@@ -33,7 +34,7 @@ The plan is to establish a wide baseline before any further scaffolding changes:
 
 1. **Aider Polyglot** — done. 45.56 % (paper, Qwen3.5-9B) and 78.67 % (v0.0.5, Qwen3.6-35B-A3B).
 2. **Terminal-Bench-Core v0.1.1** — done. 40.0 % (v0.1.4).
-3. **Terminal-Bench 2.0** — done. 23.82 % on the full 445-trial run (v0.1.13 prompt; submitted as [PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158), awaiting maintainer merge).
+3. **Terminal-Bench 2.0** — done on Qwen3.6-35B-A3B at 23.82 % ([PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158) submitted, awaiting maintainer merge). The v0.1.24 prompt-repetition fix passed pilot validation (4 / 4 on the previously-regressing `prove-plus-comm` task) and is now under full-run validation on Qwen3.5-9B (~15.5 % at 251 / 445; will be submitted to the leaderboard on completion as a separate entry).
 4. **GAIA** — next. Research-heavy, multi-tool (Browser + Evidence), tests whether the evidence-before-answer protocol ports cleanly to a non-coding benchmark.
 5. **SWE-bench Verified** — after GAIA. Multi-file real-world patches; the longest-horizon test of whether the scaffolding generalizes past exercise-scale tasks.
 
