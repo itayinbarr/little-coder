@@ -2,6 +2,27 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v0.1.26] — 2026-04-27
+
+### Submitted — Terminal-Bench 2.0 leaderboard, PR #163 (Qwen3.5-9B at 9.21 %)
+The full k=5 run from `tb2-leaderboard-k5-v0.1.24-9b-2026-04-26__20-32-42` has been submitted to the Terminal-Bench 2.0 leaderboard as PR #163 on the official `harborframework/terminal-bench-2-leaderboard` HF dataset.
+
+- **Result**: **9.21 %** (41 / 445) — Qwen3.5-9B (Q4_K_M) via llama.cpp, fully on GPU on a single RTX 5070 Laptop with 8 GB VRAM. No cloud inference. `timeout_multiplier=1.0`, no overrides.
+- **PR**: https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/163
+- **Status**: bot-validation passed; awaiting maintainer review/merge → auto-import to https://www.tbench.ai/leaderboard/terminal-bench/2.0.
+- **Trials**: 89 tasks × 5 trials = 445 total; per-task uniformity verified, single `task_checksum` per task confirmed.
+- **Errored trials**: 8 / 445 with `exception_info` populated (Docker compose timeouts, agent timeouts). All have valid `result.json`; counted as failed per the leaderboard's bot rules.
+- **Prompt**: v0.1.24 (the prompt-repetition fix that validated 4 / 4 on the `prove-plus-comm` pilot) — same prompt as the upcoming 35B-A3B re-run would use.
+- **Companion to** [PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158) (Qwen3.6-35B-A3B at 23.82 %, also still awaiting maintainer merge).
+
+The capability gap on TB 2.0 between Qwen3.5-9B (Q4_K_M, ~5 GB) and Qwen3.6-35B-A3B (Q4_K_M, ~22 GB MoE) is **~14.6 pp** — much narrower than the Aider Polyglot baseline gap of ~33 pp. The 9B's per-token speed advantage on this hardware (~2× faster, fully on GPU vs the A3B's CPU-RAM-bound experts) doesn't translate to faster benchmark wall-clock — Docker setup + verifier overhead per trial dominates.
+
+### README updates
+- **Benchmark table**: the previously *in progress* v0.1.24 / Qwen3.5-9B row is now finalised — 9.21 % final, linked to PR #163.
+- **Roadmap item 3** (Terminal-Bench 2.0): now reflects both submissions (35B-A3B PR #158 and 9B PR #163), both awaiting maintainer merge.
+
+No code change in this release. Tests unchanged.
+
 ## [v0.1.25] — 2026-04-27
 
 ### Updated — README to reflect v0.1.24 prompt validation + 9B leaderboard run in progress
