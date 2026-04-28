@@ -2,6 +2,18 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.0.1] — 2026-04-28
+
+### Added
+- **Update check on startup.** When a newer `little-coder` is on npm, the launcher tells you and (in interactive mode) offers to update on the spot.
+  - **Interactive TTY:** prompt `Update now? [Y/n]` — Enter or `y` runs `npm install -g little-coder@latest` and asks you to re-run; `n` skips for this session.
+  - **Non-TTY (CI, scripts, pipes, `--print` pipelines):** prints a one-line stderr notice with the install command, never prompts.
+  - **Skipped automatically** for `--help`, `--version`, `--list-models`, `--export`, `--mode rpc`, `--mode json`, when `CI=true`, and for the new `--no-update-check` flag / `LITTLE_CODER_NO_UPDATE_CHECK=1` env opt-out.
+  - **Cached** at `${XDG_CACHE_HOME:-~/.cache}/little-coder/version-check.json` with a 12 h TTL — at most one network call per day.
+  - **Best-effort:** 2 s fetch timeout, all errors swallowed silently. Update check never blocks the agent if the registry is slow or unreachable.
+
+---
+
 ## [v1.0.0] — 2026-04-28
 
 Distribution + stability release. Hi everywhere, bye `./node_modules/.bin/pi`.

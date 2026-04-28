@@ -4,9 +4,10 @@
 // custom extension wired in — works from any working directory.
 
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkForUpdate } from "./update-check.mjs";
 
 // ---- 1. Node version preflight (>= 20.6.0, matching pi.dev) ----
 const MIN_NODE = [20, 6, 0];
@@ -54,20 +55,37 @@ if (existsSync(extDir)) {
   }
 }
 
-// ---- 5. Compose pi argv ----
+// ---- 5. Update check (best-effort, blocks on TTY prompt only) ----
+let currentVersion = "0.0.0";
+try {
+  const pkgJson = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf-8"));
+  if (typeof pkgJson?.version === "string") currentVersion = pkgJson.version;
+} catch {
+  // ignore — update-check just won't fire if we can't read the version
+}
+const exitAfterCheck = await checkForUpdate(currentVersion);
+if (exitAfterCheck) {
+  // Successful update happened; user needs to re-run the new binary.
+  process.exit(0);
+}
+
+// ---- 6. Compose pi argv ----
 // --no-context-files : ignore the user's AGENTS.md / CLAUDE.md so OURS wins
 // --no-extensions    : skip pi's auto-discovery from cwd; explicit -e flags still load
 // --system-prompt    : load <pkgRoot>/AGENTS.md regardless of cwd
+//
+// Strip our own flags before forwarding to pi so it doesn't reject them.
+const userArgs = process.argv.slice(2).filter((a) => a !== "--no-update-check");
 const agentsMd = join(pkgRoot, "AGENTS.md");
 const piArgs = [
   "--no-context-files",
   "--no-extensions",
   ...(existsSync(agentsMd) ? ["--system-prompt", agentsMd] : []),
   ...extArgs,
-  ...process.argv.slice(2),
+  ...userArgs,
 ];
 
-// ---- 6. Spawn pi in the user's cwd ----
+// ---- 7. Spawn pi in the user's cwd ----
 const child = spawn(piBin, piArgs, {
   stdio: "inherit",
   cwd: process.cwd(),
