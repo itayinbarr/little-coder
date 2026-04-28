@@ -16,13 +16,24 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 // "forces the model out of open-ended deliberation and back into committing
 // to an implementation" — the concrete savings of preserving the partial
 // trace are lost, but the commit-to-action pressure is the same.
+//
+// Idempotency notes (issue #8 fix):
+//   - State is reset on `agent_start` AND `turn_start` so a previous run
+//     leaving `aborted=true` cannot leak into the next conversation.
+//   - `recoveryPending` gates re-entry: while a recovery is mid-flight,
+//     message_update / turn_start cannot re-arm the abort.
+//   - The recovery sequence yields one tick (setImmediate) so pi's async
+//     abort barrier settles before we queue the follow-up message; without
+//     this, fast-streaming local backends drop the follow-up silently and
+//     the agent appears to stop.
 
 const DEFAULT_BUDGET = 2048;
 
-// Per-turn rolling state
+// Per-run rolling state (reset on agent_start)
 let thinkingChars = 0;
 let budgetForTurn = DEFAULT_BUDGET;
 let aborted = false;
+let recoveryPending = false;
 
 function charsToTokens(chars: number): number {
   // Matches local/context_manager.estimate_tokens (len/3.5)
@@ -30,6 +41,15 @@ function charsToTokens(chars: number): number {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Hard reset between conversations. agent_start fires once per /run; if a
+  // previous run aborted, `aborted` and `recoveryPending` would otherwise
+  // leak into the next conversation.
+  pi.on("agent_start", async () => {
+    thinkingChars = 0;
+    aborted = false;
+    recoveryPending = false;
+  });
+
   pi.on("before_agent_start", async (event) => {
     const opts: any = (event as any).systemPromptOptions ?? {};
     const lc = opts.littleCoder ?? {};
@@ -43,7 +63,9 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("turn_start", async () => {
     thinkingChars = 0;
-    aborted = false;
+    // Don't clear `aborted` if a recovery is mid-flight — the recovery
+    // turn_end handler clears it once the follow-up has been queued.
+    if (!recoveryPending) aborted = false;
   });
 
   pi.on("message_update", async (event, ctx) => {
@@ -52,10 +74,11 @@ export default function (pi: ExtensionAPI) {
     if (ev.type !== "thinking_delta") return;
     const delta = typeof ev.delta === "string" ? ev.delta : "";
     thinkingChars += delta.length;
-    if (aborted) return;
+    if (aborted || recoveryPending) return;
     const tokens = charsToTokens(thinkingChars);
     if (tokens > budgetForTurn) {
       aborted = true;
+      recoveryPending = true;
       ctx.ui.notify(
         `thinking-budget: ${tokens} > ${budgetForTurn} — aborting turn, will retry with thinking off`,
         "warning",
@@ -65,12 +88,18 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_end", async (_event, _ctx) => {
-    if (!aborted) return;
-    aborted = false;
+    if (!recoveryPending) return;
+    // Yield one tick so pi's abort barrier settles before we queue the
+    // follow-up. On fast-streaming local backends (qwen3.6 / llama.cpp)
+    // queuing immediately after ctx.abort() drops the follow-up silently
+    // and the agent appears to stop with no message — issue #8.
+    await new Promise<void>((r) => setImmediate(r));
     pi.setThinkingLevel("off");
     pi.sendUserMessage(
       "[thinking budget exceeded] Please commit to an implementation now. Stop deliberating and use your tools to make progress.",
       { deliverAs: "followUp" },
     );
+    recoveryPending = false;
+    aborted = false;
   });
 }

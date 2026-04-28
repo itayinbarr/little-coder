@@ -2,6 +2,30 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.0.0] — 2026-04-28
+
+Distribution + stability release. Hi everywhere, bye `./node_modules/.bin/pi`.
+
+### Added
+- **One-line install.** `curl -fsSL https://raw.githubusercontent.com/itayinbarr/little-coder/main/install.sh | bash` (or `npm install -g little-coder`). The agent now lives on your PATH; no more cloning the repo just to run it.
+- **`bin/little-coder.mjs`** — global launcher that runs from any working directory, loads our `AGENTS.md` via `--system-prompt` and every bundled `.pi/extensions/<name>/index.ts` via `-e`, and forwards user argv to pi unchanged. Spawns pi with `cwd = process.cwd()` so file tools operate on the user's project, not the install path. Forwards SIGINT / SIGTERM / SIGHUP and propagates pi's exit code.
+- **`install.sh`** — preflight (Node ≥ 20.6.0 + npm) then `npm install -g little-coder` with friendly EACCES guidance.
+- **Idempotency tests** for the thinking-budget extension covering double-burst budget breach, replayed `turn_end`, cross-conversation state reset, and post-abort tick yield.
+
+### Fixed
+- **Issue #8 (thinking budget silent stop).** The `thinking-budget` extension's module-scoped state could leak across conversations and re-emitted `turn_end` events, leading to double-aborts; the recovery sequence (`ctx.abort()` → `setThinkingLevel("off")` → `sendUserMessage` follow-up) raced pi's async abort barrier and the follow-up was dropped silently on fast-streaming local backends like Qwen3.6-35B-A3B-UD-Q4_K_M. The patched extension resets state on `agent_start`, gates re-entry with a `recoveryPending` flag, and yields one tick (`setImmediate`) before queuing the follow-up. Configured budget values in `.pi/settings.json` are unchanged.
+- **Issue #9 (working in folders other than the cloned repo).** With the global install, `cd` to whichever project you want to operate on in your own shell, then run `little-coder` — the agent's cwd is your shell's cwd. The earlier "`cd` is banned in the bash whitelist" friction is gone because nobody needs to `cd` from inside the agent anymore.
+
+### Changed
+- Package is no longer `private` and ships an explicit `files` whitelist: `bin/`, `AGENTS.md`, `skills/`, `.pi/extensions/`, `.pi/settings.json`, `models.json`, `LICENSE`, `NOTICE`, `README.md`, `CHANGELOG.md`. Excluded from the published tarball: `benchmarks/`, `docs/`, `.claude/`, tests, `tsconfig.json`, `vitest.config.ts`.
+- `package.json` declares `engines.node >= 20.6.0` and `bin.little-coder`.
+- README install section rewritten around the curl one-liner; troubleshooting updated for global install; new "Developing little-coder locally" section for contributors.
+
+### Migration
+Existing clones still work — `npm link` from the checkout keeps the legacy flow alive for anyone hacking on extensions. Benchmarks (`benchmarks/`) continue to expect the local checkout layout; they're dev-only and not affected by global install.
+
+---
+
 ## [v0.1.27] — 2026-04-28
 
 ### GAIA validation-set result — **40.00 %** (66 / 165) on Qwen3.6-35B-A3B

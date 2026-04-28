@@ -8,7 +8,7 @@ The research story behind all this — why scaffold–model fit matters, how a 9
 
 [pi](https://pi.dev) is the minimal substrate — agent loop, multi-provider API, TUI, session tree, compaction, extension model. Four built-in tools (read / write / edit / bash) and a ~1000-token system prompt.
 
-little-coder is **pi + 16 extensions + 30 skill markdown files + a Python benchmark harness**. It doesn't fork pi or shadow its CLI — pi is a plain dependency in `package.json`, and everything little-coder-specific lives under `.pi/extensions/`, `skills/`, and `benchmarks/`. You can mix little-coder with pi packages from anyone else, add your own extensions, or disable ours per-project via `.pi/settings.json`.
+little-coder is **pi + 20 extensions + 30 skill markdown files + a Python benchmark harness**. It doesn't fork pi or shadow its CLI — pi is a plain dependency in `package.json`, and everything little-coder-specific lives under `.pi/extensions/`, `skills/`, and `benchmarks/`. You can mix little-coder with pi packages from anyone else, add your own extensions, or disable ours per-project via `.pi/settings.json`.
 
 If you've never used pi, it's useful to skim [pi.dev](https://pi.dev) first — the rest of this doc assumes pi's model of `--agent-import-path`, `--mode rpc`, and `.pi/extensions/` auto-discovery.
 
@@ -43,27 +43,54 @@ The plan is to establish a wide baseline before any further scaffolding changes:
 
 ---
 
-## Setup
+## Install
 
-### What you'll need
-
-- **Node.js 20+** — for pi's runtime. `node --version`.
-- **Either a local model** (llama.cpp or Ollama on your machine) **or an API key** for any pi-supported cloud provider (Anthropic, OpenAI, Google, Groq, Cerebras, Mistral, xAI, …).
-- **(Benchmarks only)** Python 3.10+ and Docker. Not needed for interactive use.
-
-### Step 1 — Clone and install
+One-line install (Node.js 20.6+ required):
 
 ```bash
-git clone https://github.com/itayinbarr/little-coder.git
-cd little-coder
-npm install
+curl -fsSL https://raw.githubusercontent.com/itayinbarr/little-coder/main/install.sh | bash
 ```
 
-`npm install` pulls pi (`@mariozechner/pi-coding-agent`) and the small TypeBox schema helper. pi's CLI ends up at `./node_modules/.bin/pi` — add it to your PATH or use `npx pi` if you prefer.
+Or with npm directly:
 
-That's the whole install. No Python needed unless you're running a benchmark.
+```bash
+npm install -g little-coder
+```
 
-### Step 2 — Serve a model (or add a key)
+That's the whole install. No clone, no `npm install` in a workspace, no PATH fiddling. `little-coder` is now on your PATH and works from any directory.
+
+## Run
+
+```bash
+cd ~/your-project
+little-coder --model anthropic/claude-haiku-4-5
+```
+
+Other models work the same way:
+
+```bash
+little-coder --model openai/gpt-4o-mini "What does this codebase do?"
+little-coder --model llamacpp/qwen3.6-35b-a3b   # local llama.cpp server
+little-coder --model ollama/qwen3.5             # local Ollama
+little-coder --list-models                      # see everything pi knows about
+```
+
+The agent uses the directory you launched it from as its working directory — `Read` / `Write` / `Edit` / `Bash` operate on your project, not on little-coder's install path.
+
+For local providers (llama.cpp, Ollama) pi expects *some* value in the API-key env even though local servers ignore it:
+
+```bash
+export LLAMACPP_API_KEY=noop
+export OLLAMA_API_KEY=noop
+```
+
+`LLAMACPP_BASE_URL` and `OLLAMA_BASE_URL` override the defaults (`http://127.0.0.1:8888/v1`, `http://127.0.0.1:11434/v1`).
+
+For cloud providers, set the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) and pi will discover it.
+
+## Local model setup (optional)
+
+Skip this section if you're using a cloud model.
 
 **Option A — llama.cpp** (fastest for local; supports Qwen3.6-35B-A3B MoE):
 
@@ -91,61 +118,39 @@ ollama pull qwen3.5        # 9.7B — the paper's model
 # or: ollama pull qwen3.6-35b-a3b
 ```
 
-**Option C — a cloud provider.** Set the provider's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) and pi will discover it. All small-model-specific extensions auto-disable for large/cloud models so they don't interfere.
-
-### Step 3 — Run
-
-```bash
-# Interactive TUI
-./node_modules/.bin/pi --model llamacpp/qwen3.6-35b-a3b
-
-# Single prompt, exit
-./node_modules/.bin/pi -p "read README.md and summarize" --model llamacpp/qwen3.6-35b-a3b
-
-# Any pi-supported cloud model works too
-./node_modules/.bin/pi --model anthropic/claude-opus-4-5
-```
-
-For local providers pi still wants **some** value in the API-key env — anything is fine since llama.cpp/Ollama ignore it:
-
-```bash
-export LLAMACPP_API_KEY=noop
-export OLLAMA_API_KEY=noop
-```
-
-`LLAMACPP_BASE_URL` and `OLLAMA_BASE_URL` override the defaults (`http://127.0.0.1:8888/v1`, `http://127.0.0.1:11434/v1`).
-
-### Step 4 — (optional) Run a benchmark
-
-```bash
-# Quick smoke — one prompt through the whole stack
-python3 benchmarks/smoke.py "What is 2+2?"
-
-# One Aider Polyglot exercise
-python3 benchmarks/aider_polyglot.py --exercise affine-cipher --language python --verbose
-
-# Terminal-Bench 1.0 pilot (needs the terminal-bench pip package + Docker)
-pip install terminal-bench
-benchmarks/tb_pilot.sh hello-world
-
-# Terminal-Bench 2.0 pilot (needs the harbor pip package + Docker)
-uv tool install harbor        # or: pip install harbor
-benchmarks/harbor_pilot.sh fix-git
-```
+All small-model-specific extensions auto-disable for large/cloud models so they don't interfere.
 
 ---
 
 ## Troubleshooting
 
-**`pi: command not found`** — you're calling `pi` without `npx` or PATH. Use `./node_modules/.bin/pi` from the repo root or `npx pi`.
+**`little-coder: command not found`** — npm's global bin directory isn't on your PATH. Run `npm config get prefix` to see where it installed; add `<prefix>/bin` to your PATH. Or reinstall with `sudo` if your prefix needs root.
 
 **`ECONNREFUSED 127.0.0.1:8888`** — llama.cpp isn't running. Start `llama-server` first, or switch `--model` to an Ollama/cloud ID.
 
 **No API key env var warning** — pi expects *some* key even for local providers. Export `LLAMACPP_API_KEY=noop` (or `OLLAMA_API_KEY=noop`) before launching.
 
-**Extension load failures on startup** — run `./node_modules/.bin/pi --list-models` with `--verbose` — extension errors surface there. Common cause: deleted `node_modules` (re-run `npm install`).
+**Extension load failures on startup** — run `little-coder --list-models --verbose`; extension errors surface there. If the install looks corrupt: `npm uninstall -g little-coder && npm install -g little-coder`.
 
-**Benchmarks can't find pi** — the benchmark harnesses expect `./node_modules/.bin/pi` relative to the repo root. If you moved things, set `PI_BIN` env or run from the repo root.
+**Node version too old** — little-coder needs Node ≥ 20.6.0. Check with `node --version`. Easiest fix: `nvm install 20 && nvm use 20`.
+
+---
+
+## Developing little-coder locally
+
+If you want to hack on the extensions or skills:
+
+```bash
+git clone https://github.com/itayinbarr/little-coder.git
+cd little-coder
+npm install
+npm link            # makes the local checkout available as `little-coder`
+little-coder --model anthropic/claude-haiku-4-5
+```
+
+To unlink: `npm unlink -g little-coder`.
+
+The benchmarks harness (`benchmarks/`) is dev-only and not shipped with the npm package. Run it from a clone with `python3 benchmarks/aider_polyglot.py …` etc.
 
 ---
 
@@ -155,7 +160,7 @@ benchmarks/harbor_pilot.sh fix-git
 little-coder/
 ├── .pi/
 │   ├── settings.json               # per-model profiles + benchmark_overrides (terminal_bench, gaia)
-│   └── extensions/                 # 16 TypeScript extensions, auto-discovered by pi
+│   └── extensions/                 # 20 TypeScript extensions, auto-discovered by pi
 │       ├── llama-cpp-provider/     # registers llamacpp/* and ollama/* as OpenAI-compat providers
 │       ├── write-guard/            # Write refuses on existing files — the whitepaper invariant
 │       ├── extra-tools/            # glob, webfetch, websearch (pi ships grep/find)

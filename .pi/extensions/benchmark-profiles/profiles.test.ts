@@ -59,7 +59,7 @@ describe("benchmark-profiles resolution against real settings.json", () => {
     const p = resolveProfile(settings, "llamacpp/qwen3.6-35b-a3b", "gaia");
     expect(p.thinking_budget).toBe(2000);
     expect(p.temperature).toBe(0.4);
-    expect(p.max_turns).toBe(30);
+    expect(p.max_turns).toBe(40);
     expect(p.context_limit).toBe(65536);
   });
 
