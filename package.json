@@ -1,6 +1,6 @@
 {
   "name": "little-coder",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A pi-based coding agent optimized for small local language models. Reproduces the whitepaper's scaffold-model-fit adaptations as pi extensions.",
   "homepage": "https://github.com/itayinbarr/little-coder",
   "repository": {

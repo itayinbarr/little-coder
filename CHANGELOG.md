@@ -2,6 +2,13 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.0.2] — 2026-04-28
+
+### Changed
+- README order: **Install**, **Run**, and **Local model setup** now lead the doc (right after "How it relates to pi"), with **Paper / benchmark results** and **Roadmap** moved below. New users hit the install command first instead of scrolling past benchmark tables.
+
+---
+
 ## [v1.0.1] — 2026-04-28
 
 ### Added

@@ -12,37 +12,6 @@ little-coder is **pi + 20 extensions + 30 skill markdown files + a Python benchm
 
 If you've never used pi, it's useful to skim [pi.dev](https://pi.dev) first — the rest of this doc assumes pi's model of `--agent-import-path`, `--mode rpc`, and `.pi/extensions/` auto-discovery.
 
-## Paper / benchmark results
-
-| Release | Model | Benchmark | Result |
-|---|---|---|---|
-| [**v0.0.2**](https://github.com/itayinbarr/little-coder/releases/tag/v0.0.2) (commit `1d62bde`) — the paper | Qwen3.5-9B via Ollama | Aider Polyglot (225 exercises) | **45.56 %** mean of two runs; matched-model vanilla Aider baseline 19.11 %. Paper: [*Honey, I Shrunk the Coding Agent* on Substack](https://open.substack.com/pub/itayinbarr/p/honey-i-shrunk-the-coding-agent). |
-| [**v0.0.5**](https://github.com/itayinbarr/little-coder/releases/tag/v0.0.5) — pre-pi Python | Qwen3.6-35B-A3B via llama.cpp | Aider Polyglot | **78.67 %**. [Full narrative](docs/benchmark-qwen3.6-35b-a3b.md). |
-| [**v0.1.4**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.4) — on pi | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench-Core v0.1.1 (80 tasks) | **40.0 %** in 6 h 50 min. [Write-up](docs/benchmark-terminal-bench-v0.1.1.md). |
-| [**v0.1.13**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.13) — on pi, TB 2.0 leaderboard | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **23.82 %** (106 / 445). [PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158) — awaiting maintainer merge. |
-| [**v0.1.24**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.24) — on pi, TB 2.0 leaderboard, smaller model | Qwen3.5-9B (Q4_K_M) via llama.cpp (5.3 GB on GPU, 2× faster per-token than the 35B-A3B) | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **9.21 %** (41 / 445). [PR #163](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/163) — awaiting maintainer merge. |
-| [**v0.1.27**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.27) — on pi, GAIA validation | Qwen3.6-35B-A3B via llama.cpp | GAIA validation set (165 tasks) | **40.00 %** (66 / 165). L1 60.4 % / L2 37.2 % / L3 7.7 %. Test-split run pending. |
-
-All runs used a consumer laptop: i9-14900HX, 32 GB RAM, **8 GB VRAM** on RTX 5070 Laptop (Blackwell). No cloud inference at any point.
-
----
-
-## Roadmap
-
-The near-term focus is **benchmarking**, not new features. The paper established that scaffold–model fit moves a 9.7 B model from 19 % to 45 % on Aider Polyglot. The open question is: **how wide is the impact radius?** Does the same set of adaptations — Write-vs-Edit invariant, per-turn skill injection, thinking-budget cap, output-repair, quality monitor — help on tasks that *aren't* self-contained coding exercises? What breaks? What compounds?
-
-The plan is to establish a wide baseline before any further scaffolding changes:
-
-1. **Aider Polyglot** — done. 45.56 % (paper, Qwen3.5-9B) and 78.67 % (v0.0.5, Qwen3.6-35B-A3B).
-2. **Terminal-Bench-Core v0.1.1** — done. 40.0 % (v0.1.4).
-3. **Terminal-Bench 2.0** — done. Qwen3.6-35B-A3B at **23.82 %** ([PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158)) and Qwen3.5-9B at **9.21 %** ([PR #163](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/163)), both awaiting maintainer merge. The v0.1.24 prompt-repetition fix (re-add tool descriptions + concision guideline, validated by a 4 / 4 pilot on the previously-regressing `prove-plus-comm` task) was the prompt for both submissions.
-4. **GAIA** — validation set done at v0.1.27: **40.00 %** (66 / 165) on Qwen3.6-35B-A3B. Per-level L1 60.4 % / L2 37.2 % / L3 7.7 %. Test-split run (301 tasks) pending → leaderboard submission to follow.
-5. **SWE-bench Verified** — after GAIA. Multi-file real-world patches; the longest-horizon test of whether the scaffolding generalizes past exercise-scale tasks.
-
-**After that baseline is in place**, the next phase starts: improvement experiments targeted at the specific failure patterns we've seen (thinking-budget / quality-monitor behavior on long-horizon tasks, deliberate.py-style parallel branches on failure, better shell-session recovery for interactive-process traps). No scaffold changes until the data says which ones are worth running.
-
----
-
 ## Install
 
 One-line install (Node.js 20.6+ required):
@@ -119,6 +88,37 @@ ollama pull qwen3.5        # 9.7B — the paper's model
 ```
 
 All small-model-specific extensions auto-disable for large/cloud models so they don't interfere.
+
+---
+
+## Paper / benchmark results
+
+| Release | Model | Benchmark | Result |
+|---|---|---|---|
+| [**v0.0.2**](https://github.com/itayinbarr/little-coder/releases/tag/v0.0.2) (commit `1d62bde`) — the paper | Qwen3.5-9B via Ollama | Aider Polyglot (225 exercises) | **45.56 %** mean of two runs; matched-model vanilla Aider baseline 19.11 %. Paper: [*Honey, I Shrunk the Coding Agent* on Substack](https://open.substack.com/pub/itayinbarr/p/honey-i-shrunk-the-coding-agent). |
+| [**v0.0.5**](https://github.com/itayinbarr/little-coder/releases/tag/v0.0.5) — pre-pi Python | Qwen3.6-35B-A3B via llama.cpp | Aider Polyglot | **78.67 %**. [Full narrative](docs/benchmark-qwen3.6-35b-a3b.md). |
+| [**v0.1.4**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.4) — on pi | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench-Core v0.1.1 (80 tasks) | **40.0 %** in 6 h 50 min. [Write-up](docs/benchmark-terminal-bench-v0.1.1.md). |
+| [**v0.1.13**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.13) — on pi, TB 2.0 leaderboard | Qwen3.6-35B-A3B via llama.cpp | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **23.82 %** (106 / 445). [PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158) — awaiting maintainer merge. |
+| [**v0.1.24**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.24) — on pi, TB 2.0 leaderboard, smaller model | Qwen3.5-9B (Q4_K_M) via llama.cpp (5.3 GB on GPU, 2× faster per-token than the 35B-A3B) | Terminal-Bench 2.0 (89 tasks × 5 trials = 445) | **9.21 %** (41 / 445). [PR #163](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/163) — awaiting maintainer merge. |
+| [**v0.1.27**](https://github.com/itayinbarr/little-coder/releases/tag/v0.1.27) — on pi, GAIA validation | Qwen3.6-35B-A3B via llama.cpp | GAIA validation set (165 tasks) | **40.00 %** (66 / 165). L1 60.4 % / L2 37.2 % / L3 7.7 %. Test-split run pending. |
+
+All runs used a consumer laptop: i9-14900HX, 32 GB RAM, **8 GB VRAM** on RTX 5070 Laptop (Blackwell). No cloud inference at any point.
+
+---
+
+## Roadmap
+
+The near-term focus is **benchmarking**, not new features. The paper established that scaffold–model fit moves a 9.7 B model from 19 % to 45 % on Aider Polyglot. The open question is: **how wide is the impact radius?** Does the same set of adaptations — Write-vs-Edit invariant, per-turn skill injection, thinking-budget cap, output-repair, quality monitor — help on tasks that *aren't* self-contained coding exercises? What breaks? What compounds?
+
+The plan is to establish a wide baseline before any further scaffolding changes:
+
+1. **Aider Polyglot** — done. 45.56 % (paper, Qwen3.5-9B) and 78.67 % (v0.0.5, Qwen3.6-35B-A3B).
+2. **Terminal-Bench-Core v0.1.1** — done. 40.0 % (v0.1.4).
+3. **Terminal-Bench 2.0** — done. Qwen3.6-35B-A3B at **23.82 %** ([PR #158](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/158)) and Qwen3.5-9B at **9.21 %** ([PR #163](https://huggingface.co/datasets/harborframework/terminal-bench-2-leaderboard/discussions/163)), both awaiting maintainer merge. The v0.1.24 prompt-repetition fix (re-add tool descriptions + concision guideline, validated by a 4 / 4 pilot on the previously-regressing `prove-plus-comm` task) was the prompt for both submissions.
+4. **GAIA** — validation set done at v0.1.27: **40.00 %** (66 / 165) on Qwen3.6-35B-A3B. Per-level L1 60.4 % / L2 37.2 % / L3 7.7 %. Test-split run (301 tasks) pending → leaderboard submission to follow.
+5. **SWE-bench Verified** — after GAIA. Multi-file real-world patches; the longest-horizon test of whether the scaffolding generalizes past exercise-scale tasks.
+
+**After that baseline is in place**, the next phase starts: improvement experiments targeted at the specific failure patterns we've seen (thinking-budget / quality-monitor behavior on long-horizon tasks, deliberate.py-style parallel branches on failure, better shell-session recovery for interactive-process traps). No scaffold changes until the data says which ones are worth running.
 
 ---
 
