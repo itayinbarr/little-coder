@@ -29,7 +29,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, "..");
 
 // ---- 3. Resolve the bundled pi binary ----
-const piBin = join(pkgRoot, "node_modules", ".bin", "pi");
+const isWindows = process.platform === "win32";
+const piBinBase = join(pkgRoot, "node_modules", ".bin", "pi");
+const piBin = isWindows && existsSync(`${piBinBase}.cmd`) ? `${piBinBase}.cmd` : piBinBase;
 if (!existsSync(piBin)) {
   console.error(
     `little-coder: cannot find pi at ${piBin}.\n` +
@@ -86,7 +88,11 @@ const piArgs = [
 ];
 
 // ---- 7. Spawn pi in the user's cwd ----
-const child = spawn(piBin, piArgs, {
+const [spawnCmd, spawnArgs] = isWindows
+  ? ["cmd.exe", ["/c", piBin, ...piArgs]]
+  : [piBin, piArgs];
+
+const child = spawn(spawnCmd, spawnArgs, {
   stdio: "inherit",
   cwd: process.cwd(),
   env: process.env,
