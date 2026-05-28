@@ -4,8 +4,8 @@
   "retry": { "enabled": true, "maxRetries": 2 },
   "little_coder": {
     "default_model_profile": {
-      "max_tokens": 4096,
-      "thinking_budget": 4096,
+      "max_tokens": 8192,
+      "thinking_budget": 8192,
       "skill_token_budget": 300,
       "knowledge_token_budget": 200,
       "system_prompt_budget": 0,
@@ -14,19 +14,19 @@
     },
     "model_profiles": {
       "llamacpp/qwen3.6-27b": {
-        "max_tokens": 4096,
-        "thinking_budget": 4096,
+        "max_tokens": 8192,
+        "thinking_budget": 8192,
         "skill_token_budget": 300,
         "knowledge_token_budget": 200,
         "temperature": 0.3,
         "benchmark_overrides": {
           "terminal_bench": {
-            "thinking_budget": 3000,
+            "thinking_budget": 4000,
             "temperature": 0.2,
             "max_turns": 40
           },
           "gaia": {
-            "thinking_budget": 2000,
+            "thinking_budget": 4000,
             "temperature": 0.4,
             "max_turns": 40,
             "context_limit": 65536
@@ -34,19 +34,19 @@
         }
       },
       "llamacpp/qwen3.6-35b-a3b": {
-        "max_tokens": 4096,
-        "thinking_budget": 4096,
+        "max_tokens": 8192,
+        "thinking_budget": 8192,
         "skill_token_budget": 300,
         "knowledge_token_budget": 200,
         "temperature": 0.3,
         "benchmark_overrides": {
           "terminal_bench": {
-            "thinking_budget": 3000,
+            "thinking_budget": 4000,
             "temperature": 0.2,
             "max_turns": 40
           },
           "gaia": {
-            "thinking_budget": 2000,
+            "thinking_budget": 4000,
             "temperature": 0.4,
             "max_turns": 40,
             "context_limit": 65536
@@ -54,22 +54,22 @@
         }
       },
       "llamacpp/qwen3.5-9b": {
-        "max_tokens": 4096,
-        "thinking_budget": 4096,
+        "max_tokens": 8192,
+        "thinking_budget": 8192,
         "skill_token_budget": 300,
         "knowledge_token_budget": 200,
         "temperature": 0.3
       },
       "ollama/qwen3.5": {
-        "max_tokens": 4096,
-        "thinking_budget": 4096,
+        "max_tokens": 8192,
+        "thinking_budget": 8192,
         "skill_token_budget": 300,
         "knowledge_token_budget": 200,
         "temperature": 0.3
       },
       "lmstudio/local-model": {
-        "max_tokens": 4096,
-        "thinking_budget": 4096,
+        "max_tokens": 8192,
+        "thinking_budget": 8192,
         "skill_token_budget": 300,
         "knowledge_token_budget": 200,
         "temperature": 0.3
