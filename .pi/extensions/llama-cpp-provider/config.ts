@@ -58,7 +58,8 @@ export function resolveOverridePath(env: NodeJS.ProcessEnv = process.env): strin
   if (env.LITTLE_CODER_MODELS_FILE) return env.LITTLE_CODER_MODELS_FILE;
   const xdg = env.XDG_CONFIG_HOME;
   if (xdg) return join(xdg, "little-coder", "models.json");
-  if (env.HOME) return join(env.HOME, ".config", "little-coder", "models.json");
+  const home = env.HOME || env.USERPROFILE;
+  if (home) return join(home, ".config", "little-coder", "models.json");
   return undefined;
 }
 

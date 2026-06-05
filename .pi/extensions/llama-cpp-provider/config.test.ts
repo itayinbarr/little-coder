@@ -37,10 +37,13 @@ describe("resolveOverridePath", () => {
     expect(resolveOverridePath({ LITTLE_CODER_MODELS_FILE: "/explicit.json", HOME: "/h" })).toBe("/explicit.json");
   });
   it("falls back to XDG_CONFIG_HOME", () => {
-    expect(resolveOverridePath({ XDG_CONFIG_HOME: "/xdg", HOME: "/h" })).toBe("/xdg/little-coder/models.json");
+    expect(resolveOverridePath({ XDG_CONFIG_HOME: "/xdg", HOME: "/h" })).toBe(join("/xdg", "little-coder", "models.json"),);
   });
   it("falls back to HOME/.config", () => {
-    expect(resolveOverridePath({ HOME: "/h" })).toBe("/h/.config/little-coder/models.json");
+    expect(resolveOverridePath({ HOME: "/h" })).toBe(join("/h", ".config", "little-coder", "models.json"),);
+  });
+  it("falls back to USERPROFILE/.config when HOME is absent", () => {
+    expect(resolveOverridePath({ USERPROFILE: "/profile" })).toBe(join("/profile", ".config", "little-coder", "models.json"),);
   });
   it("returns undefined when neither is set", () => {
     expect(resolveOverridePath({})).toBeUndefined();
