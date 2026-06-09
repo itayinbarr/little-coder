@@ -104,7 +104,7 @@ If you only need text and want to skip the projector download, drop the second `
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3.5        # 9.7B — the paper's model
-# or: ollama pull qwen3.6-35b-a3b
+# or: ollama pull qwen3.6:35b-a3b
 ```
 
 **Option C — LM Studio** (GUI; OpenAI-compatible server on port 1234):
