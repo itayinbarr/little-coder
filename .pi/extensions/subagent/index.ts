@@ -190,11 +190,108 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
+/**
+ * Sanitize and wrap lines to prevent TUI crash on narrow terminals.
+ *
+ * Two problems are solved:
+ * 1. Long whitespace-free tokens (URLs, file paths, base64) are broken up
+ *    with spaces so word-wrap can split them — follows openclaw-cn's
+ *    tui-formatters.ts sanitizer (commit 8c822da).
+ * 2. Lines are wrapped to the available width so that no rendered line
+ *    ever exceeds terminal width.
+ *
+ * We implement a minimal ANSI-aware wrapper here rather than importing from
+ * pi-tui (pi 0.79+ stopped hoisting pi-tui for extensions).
+ */
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const MAX_TOKEN_CHARS = 32;
+const LONG_TOKEN_RE = /\S{33,}/g;
+
+function chunkToken(token: string): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < token.length; i += MAX_TOKEN_CHARS) {
+    chunks.push(token.slice(i, i + MAX_TOKEN_CHARS));
+  }
+  return chunks;
+}
+
+function sanitizeLongTokens(text: string): string {
+  return LONG_TOKEN_RE.test(text)
+    ? text.replace(LONG_TOKEN_RE, (token) => chunkToken(token).join(" "))
+    : text;
+}
+
+/**
+ * Extract leading ANSI SGR codes from a string.
+ * e.g. "\x1b[38;2;128;128;128mHello\x1b[39m" → prefix="\x1b[38;2;128;128;128m"
+ */
+function extractAnsiPrefix(text: string): { prefix: string; rest: string } {
+  let end = 0;
+  while (end < text.length && text.slice(end, end + 2) === "\x1b[") {
+    const mPos = text.indexOf("m", end + 2);
+    if (mPos === -1) break;
+    end = mPos + 1;
+  }
+  return { prefix: text.slice(0, end), rest: text.slice(end) };
+}
+
+/**
+ * Strip all ANSI SGR codes from a string.
+ */
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_RE, "");
+}
+
+/**
+ * Minimal word-wrap for a plain-text string. Splits at whitespace boundaries
+ * so no output line exceeds `maxWidth` characters. Long tokens are already
+ * broken up by sanitizeLongTokens before this is called.
+ */
+function wrapPlainText(text: string, maxWidth: number): string[] {
+  if (text.length <= maxWidth) return [text];
+  const words = text.split(/\s+/);
+  const result: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!word) continue;
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= maxWidth) {
+      current += " " + word;
+    } else {
+      result.push(current);
+      current = word;
+    }
+  }
+  if (current) result.push(current);
+  return result.length > 0 ? result : [text];
+}
+
+/**
+ * Wrap a single line (possibly with ANSI codes) to fit within `width`.
+ * Extracts the leading ANSI prefix, strips all ANSI, wraps the plain text,
+ * then re-applies the prefix to each wrapped line.
+ */
+function wrapLine(line: string, width: number): string[] {
+  const plain = stripAnsi(line);
+  if (plain.length <= width) return [line];
+  const { prefix } = extractAnsiPrefix(line);
+  const wrappedLines = wrapPlainText(plain, width);
+  return wrappedLines.map((l) => prefix + l);
+}
+
 /** A minimal pi-tui Component backed by precomputed lines. */
 function makeComponent(lines: string[]) {
   return {
-    render(_width: number): string[] {
-      return lines;
+    render(width: number): string[] {
+      const output: string[] = [];
+      for (const line of lines) {
+        const sanitized = sanitizeLongTokens(line);
+        for (const wrapped of wrapLine(sanitized, width)) {
+          output.push(wrapped);
+        }
+      }
+      return output;
     },
     invalidate() {},
   };
