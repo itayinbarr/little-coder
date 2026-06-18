@@ -297,6 +297,10 @@ This is where the scaffolding work now compounds: knowledge injection/selection,
 
 ## Troubleshooting
 
+**`--update` flag** — pass `little-coder --update` to force an immediate version check, bypassing the 12-hour cache. Useful right after a release. The flag is stripped before pi sees argv so it won't produce an "Unknown option" error.
+
+**Auto-update fails on Windows (≤ v1.9.5): `npm exit null`** — the updater in those versions can't locate `npm.cmd`. Fixed in v1.9.6, but the broken updater can't deliver its own fix — run `npm install -g little-coder@latest` once to get there, then auto-update works normally.
+
 **`little-coder: command not found`** — npm's global bin directory isn't on your PATH. Run `npm config get prefix` to see where it installed; add `<prefix>/bin` to your PATH. Or reinstall with `sudo` if your prefix needs root.
 
 **`ECONNREFUSED 127.0.0.1:8888`** — llama.cpp isn't running. Start `llama-server` first, or switch `--model` to an Ollama/cloud ID.
