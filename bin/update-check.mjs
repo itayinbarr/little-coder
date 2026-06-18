@@ -162,13 +162,14 @@ export async function checkForUpdate(currentVersion, opts = {}) {
   }
 
   process.stderr.write(`\n   Running: npm install -g little-coder@${latest}\n\n`);
-  // shell: true is required on Windows where `npm` resolves to `npm.cmd` (a
-  // batch file shim). Without it, spawnSync cannot find the executable and
-  // returns { status: null, error: { code: "ENOENT" } } before npm ever runs.
-  const result = spawnSync("npm", ["install", "-g", `little-coder@${latest}`], {
-    stdio: "inherit",
-    shell: true,
-  });
+  // On Windows `npm` resolves to `npm.cmd`, a batch-file shim that Node's
+  // spawnSync cannot execute without shell:true. However, shell:true with
+  // array args triggers DEP0190 on Node 24+. Instead, invoke cmd.exe directly
+  // via COMSPEC — it resolves `npm` to `npm.cmd` itself, no shell:true needed.
+  const npmArgs = ["install", "-g", `little-coder@${latest}`];
+  const result = process.platform === "win32"
+    ? spawnSync(process.env.COMSPEC || "cmd.exe", ["/c", "npm", ...npmArgs], { stdio: "inherit" })
+    : spawnSync("npm", npmArgs, { stdio: "inherit" });
   if (result.status === 0) {
     process.stderr.write(
       `\n   ✓ Updated to v${latest}. Re-run \`little-coder\` to use the new version.\n\n`,
