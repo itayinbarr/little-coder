@@ -135,7 +135,8 @@ try {
   // ignore — update-check just won't fire if we can't read the version
 }
 if (!isSubagent) {
-  const exitAfterCheck = await checkForUpdate(currentVersion);
+  const forceUpdate = process.argv.includes("--update");
+  const exitAfterCheck = await checkForUpdate(currentVersion, { force: forceUpdate });
   if (exitAfterCheck) {
     // Successful update happened; user needs to re-run the new binary.
     process.exit(0);
@@ -148,7 +149,9 @@ if (!isSubagent) {
 // --system-prompt    : load <pkgRoot>/AGENTS.md regardless of cwd
 //
 // Strip our own flags before forwarding to pi so it doesn't reject them.
-const userArgs = process.argv.slice(2).filter((a) => a !== "--no-update-check");
+const userArgs = process.argv.slice(2).filter(
+  (a) => a !== "--no-update-check" && a !== "--update",
+);
 const agentsMd = join(pkgRoot, "AGENTS.md");
 
 // Default the thinking level to "medium" for interactive sessions (pi's own

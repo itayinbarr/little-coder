@@ -123,17 +123,28 @@ function promptYesNo(question) {
 // Returns `true` if the launcher should NOT proceed to spawn pi (because we
 // updated and exited / the user opted out and we should re-run).  Returns
 // `false` to let the launcher continue.
+//
+// opts.force — bypass the 12h cache and always fetch the latest version from
+//   the registry. Used when the user explicitly passes `--update`. If already
+//   at the latest version, prints a short "up to date" notice instead of
+//   silently returning.
 export async function checkForUpdate(currentVersion, opts = {}) {
   const skip = opts.skip ?? shouldSkip();
   if (skip === true) return false;
 
-  let latest = readCache()?.latest;
+  const force = opts.force ?? false;
+  let latest = (!force && readCache()?.latest) || null;
   if (!latest) {
     latest = await fetchLatest();
     if (latest) writeCache(latest);
   }
   if (!latest) return false;
-  if (compareSemver(latest, currentVersion) <= 0) return false;
+  if (compareSemver(latest, currentVersion) <= 0) {
+    if (force) {
+      process.stderr.write(`\n   ✓ little-coder is already up to date (v${currentVersion}).\n\n`);
+    }
+    return false;
+  }
 
   const headline =
     `\n📦 little-coder v${latest} is available (you have v${currentVersion}).`;
@@ -151,8 +162,12 @@ export async function checkForUpdate(currentVersion, opts = {}) {
   }
 
   process.stderr.write(`\n   Running: npm install -g little-coder@${latest}\n\n`);
+  // shell: true is required on Windows where `npm` resolves to `npm.cmd` (a
+  // batch file shim). Without it, spawnSync cannot find the executable and
+  // returns { status: null, error: { code: "ENOENT" } } before npm ever runs.
   const result = spawnSync("npm", ["install", "-g", `little-coder@${latest}`], {
     stdio: "inherit",
+    shell: true,
   });
   if (result.status === 0) {
     process.stderr.write(
@@ -160,8 +175,11 @@ export async function checkForUpdate(currentVersion, opts = {}) {
     );
     return true;
   }
+  const exitDesc = result.error
+    ? `could not launch npm (${result.error.code ?? result.error.message})`
+    : `npm exit ${result.status}`;
   process.stderr.write(
-    `\n   ✗ Update failed (npm exit ${result.status}). Continuing with v${currentVersion}.\n\n`,
+    `\n   ✗ Update failed (${exitDesc}). Continuing with v${currentVersion}.\n\n`,
   );
   return false;
 }

@@ -161,4 +161,12 @@ describe("shouldSkip", () => {
   it("returns notice-only on non-TTY pipelines", () => {
     expect(shouldSkip([], noEnv, pipeStdout())).toBe("notice-only");
   });
+
+  it("does not skip for --update (it forces the check, not skips it)", () => {
+    expect(shouldSkip(["--update"], noEnv, ttyStdout())).toBe(false);
+  });
+
+  it("notice-only still applies with --update on non-TTY", () => {
+    expect(shouldSkip(["--update"], noEnv, pipeStdout())).toBe("notice-only");
+  });
 });
