@@ -46,6 +46,9 @@ const PI_PACKAGE_EXTENSIONS = [
   "finalize-warn"
 ];
 
+// Extensions to register as pi extensions (excludes _shared which is a utility module)
+const PI_PACKAGE_PI_EXTENSIONS = PI_PACKAGE_EXTENSIONS.filter((e) => e !== "_shared");
+
 // Skills to include
 const PI_PACKAGE_SKILLS = [
   "tools",
@@ -132,7 +135,7 @@ const piPackageJson = {
     "@earendil-works/pi-tui": "*"
   },
   pi: {
-    extensions: PI_PACKAGE_EXTENSIONS.map((e) => `./extensions/${e}`),
+    extensions: PI_PACKAGE_PI_EXTENSIONS.map((e) => `./extensions/${e}`),
     skills: PI_PACKAGE_SKILLS.map((s) => `./skills/${s}`)
   },
   devDependencies: {
