@@ -5,24 +5,24 @@ name: Publish to npm
 # version, so a typo in either place is caught before anything reaches npm.
 on:
   push:
-    tags: ['v[0-9]*']
+    tags: ["v[0-9]*"]
 
 jobs:
   publish:
     name: Publish on tag
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to create the GitHub Release
-      id-token: write   # required for npm provenance via GitHub OIDC
+      contents: write # required to create the GitHub Release
+      id-token: write # required for npm provenance via GitHub OIDC
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
           # Must match package.json#engines.node (>= 22.19.0); pi 0.75+ requires it.
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
 
       - name: Verify tag matches package.json version
         run: |
@@ -107,9 +107,9 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
 
       - run: npm ci
 
