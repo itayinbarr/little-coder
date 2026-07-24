@@ -41,17 +41,54 @@ const ROWS: ReadonlyArray<readonly [string, string]> = [
   ["/hotkeys", "full keybinding reference"],
 ];
 
-// Build the panel lines. Keys are padded to a common width so descriptions
-// align into a clean column. Every line is capped to the terminal width — pi-tui
-// throws on overflow (issue #48), so this is load-bearing, not cosmetic.
-export function panelLines(width: number = terminalColumns()): string[] {
-  const keyWidth = ROWS.reduce((m, [k]) => Math.max(m, visibleWidth(k)), 0);
-  const header = `${honey("◆")} ${bold("shortcuts")}  ${gray("(ctrl-h to close)")}`;
-  const rows = ROWS.map(([k, desc]) => {
+// pi renders a string-array widget through `content.slice(0, MAX_WIDGET_LINES)`
+// and appends "... (widget truncated)" past that (interactive-mode.js). The cap
+// is 10, and a one-per-line panel of this list overflows it — which silently ate
+// the `/hotkeys` row, i.e. the pointer to the authoritative reference. So the
+// panel lays out in two columns and fits.
+const MAX_PANEL_LINES = 10;
+const GUTTER = "   ";
+
+/** Render `rows` as one aligned column: `  key   description`. */
+function column(rows: ReadonlyArray<readonly [string, string]>): string[] {
+  const keyWidth = rows.reduce((m, [k]) => Math.max(m, visibleWidth(k)), 0);
+  return rows.map(([k, desc]) => {
     const pad = " ".repeat(keyWidth - visibleWidth(k));
     return `  ${honey(k)}${pad}  ${gray(desc)}`;
   });
-  return [header, ...rows].map((l) => truncateLineToWidth(l, width));
+}
+
+/** Visible width of the widest line in `lines`. */
+function widest(lines: string[]): number {
+  return lines.reduce((m, l) => Math.max(m, visibleWidth(l)), 0);
+}
+
+// Build the panel lines. Keys are padded to a common width so descriptions align
+// into clean columns. Every line is capped to the terminal width — pi-tui throws
+// on overflow (issue #48), so that part is load-bearing, not cosmetic.
+export function panelLines(width: number = terminalColumns()): string[] {
+  const header = `${honey("◆")} ${bold("shortcuts")}  ${gray("(ctrl-h to close)")}`;
+  const bodyBudget = MAX_PANEL_LINES - 1; // header takes one
+
+  // Two columns, split down the middle so reading order stays top-to-bottom
+  // within each column.
+  const half = Math.ceil(ROWS.length / 2);
+  const left = column(ROWS.slice(0, half));
+  const right = column(ROWS.slice(half));
+  const leftWidth = widest(left);
+
+  const twoColumn = left.map((l, i) => {
+    const r = right[i];
+    if (!r) return l;
+    return l + " ".repeat(leftWidth - visibleWidth(l)) + GUTTER + r.replace(/^ {2}/, "");
+  });
+
+  // Only use two columns if they genuinely fit — on a narrow terminal a
+  // truncated second column is worse than a shorter list.
+  const fits = widest(twoColumn) <= width;
+  const body = fits ? twoColumn : column(ROWS).slice(0, bodyBudget);
+
+  return [header, ...body.slice(0, bodyBudget)].map((l) => truncateLineToWidth(l, width));
 }
 
 let helpOn = false;

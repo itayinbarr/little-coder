@@ -86,6 +86,32 @@ describe("panelLines", () => {
     expect(text(full)).toContain("LITTLE_CODER_EXTRA_EXTENSIONS");
   });
 
+  it("fits inside pi's 10-line widget cap", () => {
+    const many = {
+      ...full,
+      user: Array.from({ length: 20 }, (_, i) => `/home/me/.config/little-coder/extensions/e${i}.ts`),
+      env: Array.from({ length: 5 }, (_, i) => `/opt/env${i}.js`),
+    };
+    for (const m of [full, many, { ...full, user: [] }]) {
+      expect(panelLines(m, 120, "/home/me").length).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("drops individual paths before it drops a section or an error", () => {
+    // The counts, the pi-discovery state and the load errors are the rows that
+    // matter; a long list of paths is what should give way.
+    const many = {
+      ...full,
+      user: Array.from({ length: 20 }, (_, i) => `/home/me/.config/little-coder/extensions/e${i}.ts`),
+    };
+    const out = panelLines(many, 120, "/home/me").join("\n");
+    expect(out).toContain("bundled");
+    expect(out).toContain("yours");
+    expect(out).toContain("pi extensions");
+    expect(out).toContain("no index.ts/index.js"); // the warning survived
+    expect(out).toMatch(/\+\d+ more/); // and the overflow is acknowledged
+  });
+
   it("never emits a line wider than the terminal (issue #48 safety)", () => {
     for (const width of [20, 30, 40, 80, 120]) {
       for (const line of panelLines(full, width, "/home/me")) {

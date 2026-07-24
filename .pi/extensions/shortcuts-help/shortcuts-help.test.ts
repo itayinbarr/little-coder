@@ -28,6 +28,22 @@ describe("shortcuts-help panelLines", () => {
     expect(text).toContain("ctrl-o");
   });
 
+  it("fits inside pi's 10-line widget cap, so no row is silently eaten", () => {
+    // pi slices a widget to MAX_WIDGET_LINES=10 and appends "... (widget
+    // truncated)". A one-per-line panel overflowed that and quietly dropped the
+    // last rows — including `/hotkeys`, the pointer to the full reference.
+    for (const width of [60, 80, 120, 200]) {
+      expect(panelLines(width).length, `width ${width}`).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("still shows every shortcut at a normal width, via two columns", () => {
+    const text = panelLines(120).join("\n");
+    for (const key of ["ctrl-q", "f2", "ctrl-h", "shift-tab", "ctrl-p", "ctrl-t", "ctrl-o", "esc", "/hotkeys"]) {
+      expect(text, `${key} missing`).toContain(key);
+    }
+  });
+
   it("never emits a line wider than the given width (issue #48 safety)", () => {
     for (const width of [20, 30, 40, 80, 120]) {
       for (const line of panelLines(width)) {
@@ -36,13 +52,21 @@ describe("shortcuts-help panelLines", () => {
     }
   });
 
-  it("aligns descriptions into a column (keys padded to equal width)", () => {
+  it("aligns descriptions within each column (keys padded to equal width)", () => {
     // Descriptions should start at the same visible offset whether the key is a
     // single char (`/`) or the longest (`shift-tab`), since keys are padded.
+    // The panel is two columns, so alignment holds per column, not across both.
     const strip = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
     const lines = panelLines(120).map(strip);
-    const esc = lines.find((l) => l.includes("interrupt"))!;
-    const plan = lines.find((l) => l.includes("toggle plan mode"))!;
-    expect(esc.indexOf("interrupt")).toBe(plan.indexOf("toggle plan mode"));
+    const at = (needle: string) => {
+      const line = lines.find((l) => l.includes(needle))!;
+      expect(line, `no line contains ${needle}`).toBeDefined();
+      return line.indexOf(needle);
+    };
+    // Left column: shortest key vs longest key.
+    expect(at("toggle plan mode")).toBe(at("cycle thinking level"));
+    // Right column: same check, and it must sit right of the left column.
+    expect(at("interrupt")).toBe(at("full keybinding reference"));
+    expect(at("interrupt")).toBeGreaterThan(at("toggle plan mode"));
   });
 });

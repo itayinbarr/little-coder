@@ -76,6 +76,11 @@ const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
 const gray = (s: string) => `\x1b[90m${s}\x1b[39m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
 
+// pi slices a string-array widget to MAX_WIDGET_LINES (10) and appends
+// "... (widget truncated)", so anything past that is silently lost — including,
+// if we're careless, the load errors that are the most important rows here.
+const MAX_PANEL_LINES = 10;
+
 /**
  * Render the inventory as panel lines.
  *
@@ -84,37 +89,61 @@ const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
  * Yours are listed by path, because "which file is this actually loading" is
  * the whole question when one of them misbehaves.
  *
+ * The result is trimmed to fit pi's widget cap, dropping individual paths
+ * before it drops a section, so a user with a dozen extensions still sees the
+ * counts, the pi-discovery state, and any errors.
+ *
  * Every line is capped to `width`: pi-tui throws on overflow (issue #48), so
- * this is load-bearing rather than cosmetic.
+ * that part is load-bearing rather than cosmetic.
  */
 export function panelLines(
   m: ExtensionManifest,
   width: number,
   home: string | undefined = process.env.HOME || process.env.USERPROFILE,
 ): string[] {
-  const lines: string[] = [
-    `${honey("◆")} ${bold("extensions")}  ${gray("(/extensions to close)")}`,
-  ];
+  const header = `${honey("◆")} ${bold("extensions")}  ${gray("(/extensions to close)")}`;
+  const detail = (p: string) => `      ${gray(tildify(p, home))}`;
+
+  // Rows that must always survive: the counts, the pi-discovery state, and
+  // every load error.
+  const fixedCount = 2 + (m.env.length > 0 ? 1 : 0) + 1 + m.warnings.length;
+  // …plus the "where to put one" hint, which only appears when there's nothing
+  // to list in its place.
+  const hintCount = m.user.length === 0 ? 1 : 0;
+  let detailBudget = Math.max(0, MAX_PANEL_LINES - 1 - fixedCount - hintCount);
+
+  /** Take up to `budget` paths, summarizing the remainder on one line. */
+  const take = (paths: string[]): string[] => {
+    if (paths.length <= detailBudget) {
+      detailBudget -= paths.length;
+      return paths.map(detail);
+    }
+    // Reserve one line for the "+N more" summary.
+    const shown = Math.max(0, detailBudget - 1);
+    const out = paths.slice(0, shown).map(detail);
+    if (detailBudget > 0) out.push(`      ${gray(`+${paths.length - shown} more`)}`);
+    detailBudget = 0;
+    return out;
+  };
+
+  const lines: string[] = [header];
 
   lines.push(`  ${honey("bundled")}  ${String(m.bundled.length).padStart(3)} ${gray("loaded")}`);
-
   lines.push(`  ${honey("yours")}    ${String(m.user.length).padStart(3)} ${gray("loaded")}`);
-  for (const p of m.user) {
-    lines.push(`      ${gray(tildify(p, home))}`);
-  }
+  lines.push(...take(m.user));
   if (m.user.length === 0) {
-    if (m.userDir) {
-      lines.push(`      ${gray(`drop a .ts/.js file in ${tildify(m.userDir, home)}`)}`);
-    } else {
-      lines.push(`      ${gray("no config directory could be resolved")}`);
-    }
+    lines.push(
+      m.userDir
+        ? `      ${gray(`drop a .ts/.js file in ${tildify(m.userDir, home)}`)}`
+        : `      ${gray("no config directory could be resolved")}`,
+    );
   }
 
   if (m.env.length > 0) {
     lines.push(
       `  ${honey("env")}      ${String(m.env.length).padStart(3)} ${gray("from LITTLE_CODER_EXTRA_EXTENSIONS")}`,
     );
-    for (const p of m.env) lines.push(`      ${gray(tildify(p, home))}`);
+    lines.push(...take(m.env));
   }
 
   lines.push(
@@ -127,5 +156,7 @@ export function panelLines(
     lines.push(`  ${yellow("!")} ${yellow(w.replace(/^little-coder:\s*/, ""))}`);
   }
 
-  return lines.map((l) => (visibleWidth(l) > width ? truncateLineToWidth(l, width) : l));
+  return lines
+    .slice(0, MAX_PANEL_LINES)
+    .map((l) => (visibleWidth(l) > width ? truncateLineToWidth(l, width) : l));
 }
