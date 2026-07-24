@@ -24,8 +24,12 @@ const WIDGET_KEY = "shortcuts-help";
 // [keys, description]. Keep this to the keys a user actually reaches for; the
 // bindings are those of the bundled pi (0.79.x) + little-coder's own. `/hotkeys`
 // holds the exhaustive list, so this stays a curated subset.
+// Every row must name a key that is actually bound — a panel that lists a
+// dead key is worse than no panel (issue #74, where the startup header
+// advertised ctrl-r for "more" but pi binds that to ctrl-o).
 const ROWS: ReadonlyArray<readonly [string, string]> = [
   ["ctrl-q", "toggle plan mode"],
+  ["f2", "toggle deep research"],
   ["ctrl-h", "toggle this shortcuts panel"],
   ["shift-tab", "cycle thinking level"],
   ["ctrl-p", "cycle model"],

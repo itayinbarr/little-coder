@@ -7,6 +7,7 @@ import { getFinalText } from "../subagent/spawn.ts";
 import { currentModelId } from "../subagent/index.ts";
 import { PlanStatus } from "../plan-mode/status.ts";
 import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
+import { injectionResult } from "../_shared/inject.ts";
 import { allocateBudget, clampAgents, MAX_AGENTS, MIN_AGENTS } from "./budget.ts";
 import { ResearchProgress } from "./progress-bar.ts";
 import { reportFilename, resolveMaxDefault } from "./helpers.ts";
@@ -321,12 +322,19 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Inject the report-writing instructions + brief + findings into the write
-  // turn's system prompt, so the chat shows only the topic and the model's report.
+  // turn, hidden from the transcript so the chat shows only the topic and the
+  // model's report. Delivered as a tail message rather than a system-prompt
+  // append (issue #73 — see _shared/inject.ts); for a findings digest this
+  // size, rewriting the system prompt meant reprocessing the whole context.
   pi.on("before_agent_start", async (event) => {
     if (!pendingReport) return;
     const { topic, brief, digest, failedCount } = pendingReport;
     pendingReport = null;
-    return { systemPrompt: ((event as any).systemPrompt ?? "") + writeInstructionBlock(topic, brief, digest, failedCount) };
+    return injectionResult(
+      "lc-research",
+      writeInstructionBlock(topic, brief, digest, failedCount),
+      (event as any).systemPrompt ?? "",
+    );
   });
 
   // Block edit/write/bash during the write turn — deep research produces a report

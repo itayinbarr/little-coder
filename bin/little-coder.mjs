@@ -18,6 +18,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkForUpdate } from "./update-check.mjs";
 import { parseExtraExtensions } from "./extras.mjs";
+import { discoverUserExtensions } from "./user-extensions.mjs";
 import { resolveConfiguredDefault, decideDefaultModel } from "./default-model.mjs";
 
 // Resolve pi's agent directory (where it persists settings.json / keybindings).
@@ -105,15 +106,22 @@ const piPkgCandidates = [
   join(dirname(pkgRoot), "@earendil-works", "pi-coding-agent"),
 ];
 let piEntry;
+// The pi package root that `piEntry` came from. Declared out here on purpose:
+// two later steps need it (the runtime patcher at step 3b and the
+// lastChangelogVersion pin at step 8), and a `for (const … of …)` binding is
+// scoped to the loop body — referencing it below would throw a ReferenceError
+// that the surrounding try/catch would swallow, silently disabling both.
+let piPkgRoot;
 let piResolveErr;
-for (const piPkgRoot of piPkgCandidates) {
+for (const candidateRoot of piPkgCandidates) {
   try {
-    const piPkgJson = JSON.parse(readFileSync(join(piPkgRoot, "package.json"), "utf-8"));
+    const piPkgJson = JSON.parse(readFileSync(join(candidateRoot, "package.json"), "utf-8"));
     const binRel = typeof piPkgJson?.bin === "string" ? piPkgJson.bin : piPkgJson?.bin?.pi;
     if (typeof binRel !== "string") throw new Error("pi package.json has no bin.pi entry");
-    const candidate = resolve(piPkgRoot, binRel);
+    const candidate = resolve(candidateRoot, binRel);
     if (existsSync(candidate)) {
       piEntry = candidate;
+      piPkgRoot = candidateRoot;
       break;
     }
     piResolveErr = new Error(`resolved bin ${candidate} does not exist`);
@@ -131,11 +139,14 @@ if (!piEntry) {
   process.exit(1);
 }
 
-// ---- 3b. Re-apply little-coder's pi-runtime patches (best-effort) ----
-// pi is a normal dependency, so we can't ship a modified copy; instead we
-// re-apply small source edits (e.g. suppressing pi's bare "Operation aborted"
-// marker) on every launch. This self-heals when npm install scripts were
-// skipped or pi was reinstalled. Cosmetic only — never block launch.
+// ---- 3b. Apply little-coder's pi-runtime patches (best-effort) ----
+// pi is a normal dependency, so we can't ship a modified copy; instead we apply
+// small source edits (e.g. suppressing pi's bare "Operation aborted" marker) on
+// every launch. This is the ONLY place patching happens — little-coder ships no
+// npm install scripts (issue #75), and `/update` installs with --ignore-scripts
+// anyway (issue #50), so launch-time is the only moment that reliably runs.
+// Patching here also self-heals if pi was reinstalled under us. The patcher is
+// idempotent and swallows its own errors; this is cosmetic — never block launch.
 try {
   const { applyPiPatches } = await import("../scripts/patch-pi.mjs");
   applyPiPatches(piPkgRoot);
@@ -144,8 +155,14 @@ try {
 }
 
 // ---- 4. Auto-discover bundled extensions ----
+// Load order matters: bundled first, then the env var, then the user
+// directory. pi applies later `--extension` flags after earlier ones, so a
+// user extension can override bundled behavior rather than being shadowed by
+// it. The three sources are recorded in LITTLE_CODER_EXTENSION_MANIFEST below
+// so the `/extensions` command can tell the user where each one came from.
 const extDir = join(pkgRoot, ".pi", "extensions");
 const extArgs = [];
+const loadedBundled = [];
 if (existsSync(extDir)) {
   for (const name of readdirSync(extDir).sort()) {
     const subdir = join(extDir, name);
@@ -153,6 +170,7 @@ if (existsSync(extDir)) {
     try {
       if (statSync(subdir).isDirectory() && existsSync(idx)) {
         extArgs.push("--extension", idx);
+        loadedBundled.push(idx);
       }
     } catch {
       // skip unreadable entries
@@ -169,11 +187,44 @@ if (existsSync(extDir)) {
 // Parsing rules — ~/ expansion, directory-with-index resolution, one-line
 // warning for missing/unusable entries — live in ./extras.mjs so they're
 // unit-testable in isolation.
+const loadedFromEnv = [];
 {
   const { entries, warnings } = parseExtraExtensions(process.env.LITTLE_CODER_EXTRA_EXTENSIONS);
   for (const w of warnings) console.error(w);
-  for (const entry of entries) extArgs.push("--extension", entry);
+  for (const entry of entries) {
+    extArgs.push("--extension", entry);
+    loadedFromEnv.push(entry);
+  }
 }
+
+// ---- 4c. User extension directory (issues #67, #69) ----
+// ~/.config/little-coder/extensions (or $LITTLE_CODER_EXTENSIONS_DIR). Loaded
+// if it exists, ignored if it doesn't — an install that never creates it
+// behaves exactly as before. This is the discoverable version of 4b: no env
+// var to remember, and it survives `npm install -g little-coder@latest`.
+const loadedFromUserDir = [];
+let userExtensionsDir;
+let userExtensionWarnings = [];
+{
+  const discovered = discoverUserExtensions(process.env);
+  userExtensionsDir = discovered.dir;
+  userExtensionWarnings = discovered.warnings;
+  for (const w of discovered.warnings) console.error(w);
+  for (const entry of discovered.entries) {
+    extArgs.push("--extension", entry);
+    loadedFromUserDir.push(entry);
+  }
+}
+
+// ---- 4d. Opt-in pi-ecosystem bridge (issue #67) ----
+// Off by default, deliberately. `--no-extensions` is why "exactly this set
+// loads" holds, and that predictability is a feature on small models. But
+// wanting the pi ecosystem too is legitimate, so it's one flag away: with it,
+// pi discovers its own extensions from ~/.pi/agent/extensions and
+// <cwd>/.pi/extensions as it normally would. Project-local extensions still go
+// through pi's own trust prompt before anything runs.
+const withPiExtensions =
+  process.argv.includes("--with-pi-extensions") || process.env.LITTLE_CODER_PI_EXTENSIONS === "1";
 
 // ---- 5. Update check (best-effort, blocks on TTY prompt only) ----
 let currentVersion = "0.0.0";
@@ -233,12 +284,13 @@ if (!isSubagent) {
 
 // ---- 6. Compose pi argv ----
 // --no-context-files : ignore the user's AGENTS.md / CLAUDE.md so OURS wins
-// --no-extensions    : skip pi's auto-discovery from cwd; explicit -e flags still load
+// --no-extensions    : skip pi's auto-discovery from cwd; explicit -e flags still
+//                      load. Omitted when --with-pi-extensions is on (step 4d).
 // --system-prompt    : load <pkgRoot>/AGENTS.md regardless of cwd
 //
 // Strip our own flags before forwarding to pi so it doesn't reject them.
 const userArgs = process.argv.slice(2).filter(
-  (a) => a !== "--no-update-check" && a !== "--update",
+  (a) => a !== "--no-update-check" && a !== "--update" && a !== "--with-pi-extensions",
 );
 const agentsMd = join(pkgRoot, "AGENTS.md");
 
@@ -283,15 +335,36 @@ try {
   // never block launch over default-model resolution
 }
 
+if (withPiExtensions && !isSubagent) {
+  process.stderr.write(
+    "   ▸ pi extension discovery enabled — pi's own extensions from ~/.pi/agent and\n" +
+      "     ./.pi will load alongside little-coder's. The lean, fixed extension set\n" +
+      "     (and its small cold-start context) no longer applies.\n",
+  );
+}
+
 const piArgs = [
   "--no-context-files",
-  "--no-extensions",
+  ...(withPiExtensions ? [] : ["--no-extensions"]),
   ...(existsSync(agentsMd) ? ["--system-prompt", agentsMd] : []),
   ...thinkingArgs,
   ...defaultModelArgs,
   ...extArgs,
   ...userArgs,
 ];
+
+// Hand the extension inventory to the `/extensions` command inside the TUI.
+// The launcher is the only place that knows where each path came from — pi
+// sees an undifferentiated list of --extension flags.
+process.env.LITTLE_CODER_EXTENSION_MANIFEST = JSON.stringify({
+  bundled: loadedBundled,
+  env: loadedFromEnv,
+  user: loadedFromUserDir,
+  userDir: userExtensionsDir ?? null,
+  userDirExists: Boolean(userExtensionsDir && existsSync(userExtensionsDir)),
+  warnings: userExtensionWarnings,
+  piDiscovery: withPiExtensions,
+});
 
 // ---- 7. Suppress pi's own version-banner by default ----
 // pi is an internal dependency here; users install `little-coder` and shouldn't

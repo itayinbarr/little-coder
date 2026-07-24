@@ -48,12 +48,12 @@ Before editing unfamiliar code, surface local documentation — `.docs/instructi
 
 # Per-turn context augmentation
 
-Your system prompt is assembled per turn by little-coder's extension stack:
+little-coder's extension stack appends guidance blocks to the conversation, right after your message:
 
 - **Tool skill cards** (`## Tool Usage Guidance`): selected by error-recovery > recency > intent priority. If the previous tool call failed, its skill card is injected first.
 - **Algorithm cheat sheets** (`## Algorithm Reference`): scored against the problem statement by keyword + bigram matching. Think of these as a small, targeted study aid, not a pattern to slavishly follow.
 
-When you see these blocks, trust them — they were selected for the current turn.
+When you see these blocks, trust them — they were selected for the current turn. They arrive at the end of the conversation rather than in the system prompt, so the cached prefix stays intact; a block is not repeated while it still applies, so the most recent one you were given is the one in force.
 
 # Guidelines
 

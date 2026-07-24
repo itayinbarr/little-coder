@@ -3,15 +3,20 @@
 // for things little-coder can't express through pi's extension API.
 //
 // little-coder treats pi as a substrate it owns, not a boundary — but pi is a
-// normal npm dependency, so we can't ship a modified copy of it. Instead we
-// re-apply small source edits to the installed pi after install AND on every
-// launch (the launcher calls applyPiPatches). Running on launch makes it
-// self-heal if npm install scripts were skipped, if pi was reinstalled, or if
-// the global/hoisted layout defeated the postinstall — the launcher always
-// resolves pi's real location, so it can patch wherever pi actually lives.
+// normal npm dependency, so we can't ship a modified copy of it. Instead the
+// launcher applies small source edits to the installed pi on every launch by
+// calling applyPiPatches().
 //
-// Contract: NEVER throw, NEVER exit non-zero. A failed patch must not break
-// `npm install` or a launch — the only consequence is the un-patched UI.
+// Launch-time is the only hook there is, by design. little-coder ships NO npm
+// install scripts: a `postinstall` was the one thing tripping Socket's AI
+// malware scan (issue #75), and it was already redundant — the in-app
+// `/update` and the launcher's self-update both install with --ignore-scripts
+// (issue #50), so a postinstall never ran for anyone upgrading. Patching from
+// the launcher also means we patch wherever pi actually lives, including
+// bun's flat global layout, and it self-heals if pi is reinstalled under us.
+//
+// Contract: NEVER throw. A failed patch must not break a launch — the only
+// consequence is the un-patched UI.
 //
 // Current patches:
 //   1. Suppress pi's bare "Operation aborted" assistant-message marker. Harness
@@ -83,8 +88,9 @@ export function resolvePiRoot(piRootOverride) {
 
 /**
  * Apply all pi patches in place. Best-effort and idempotent.
- * @param {string} [piRootOverride] Known pi package root (the launcher passes
- *   its already-resolved path; postinstall omits it and we resolve).
+ * @param {string} [piRootOverride] Known pi package root. The launcher passes
+ *   its already-resolved path (the layout it actually spawns); when omitted we
+ *   fall back to resolving pi ourselves.
  */
 export function applyPiPatches(piRootOverride) {
   const piRoot = resolvePiRoot(piRootOverride);
@@ -102,12 +108,3 @@ export function applyPiPatches(piRootOverride) {
     }
   }
 }
-
-// Run directly as a postinstall hook (but not when imported by the launcher).
-let invokedDirectly = false;
-try {
-  invokedDirectly = process.argv[1] != null && fileURLToPath(import.meta.url) === process.argv[1];
-} catch {
-  invokedDirectly = false;
-}
-if (invokedDirectly) applyPiPatches();

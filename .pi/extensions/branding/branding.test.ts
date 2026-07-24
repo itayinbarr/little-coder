@@ -1,5 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { deriveSessionName } from "./index.ts";
+import { buildHeader, deriveSessionName } from "./index.ts";
+import { visibleWidth } from "../_shared/width.ts";
+
+// Minimal stand-in for pi's Theme — the header only needs fg/bold.
+const theme: any = { fg: (_name: string, s: string) => s, bold: (s: string) => s };
+const headerText = (width = 120) => buildHeader(theme, width).join("\n");
+
+describe("startup header hints (issue #74)", () => {
+  it("advertises ctrl-o for 'more', not the unbound ctrl-r", () => {
+    // pi binds "expand / more" to app.tools.expand (= ctrl+o). ctrl+r is bound
+    // only inside the session tree overlay, so at the prompt it does nothing —
+    // heinrichI reasonably reported that as broken.
+    const text = headerText();
+    expect(text).not.toContain("ctrl-r");
+    expect(text).toContain("ctrl-o");
+    expect(text).toContain("more");
+  });
+
+  it("advertises the two little-coder mode keys", () => {
+    const text = headerText();
+    expect(text).toContain("ctrl-q"); // plan mode
+    expect(text).toContain("f2"); // deep research
+    expect(text).toContain("ctrl-h"); // shortcuts panel
+  });
+
+  it("never emits a line wider than the terminal (issue #48 safety)", () => {
+    for (const width of [20, 30, 40, 80, 120]) {
+      for (const line of buildHeader(theme, width)) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+});
 
 describe("deriveSessionName", () => {
   it("uses at most the first 4 words, with an ellipsis when there are more", () => {

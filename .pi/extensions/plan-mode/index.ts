@@ -10,6 +10,7 @@ import { SubCoderTracker } from "../subagent/tracker.ts";
 import { currentModelId } from "../subagent/index.ts";
 import { PlanStatus } from "./status.ts";
 import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
+import { injectionResult } from "../_shared/inject.ts";
 
 // Plan Mode — a Claude-Code-style "research, ask, then plan" flow.
 //
@@ -312,9 +313,11 @@ export default function (pi: ExtensionAPI) {
     return { action: "handled" as const };
   });
 
-  // Inject the planning instructions + research into the synthesis turn's
-  // system prompt, so the chat shows only the user's original request and the
-  // model's plan — never the verbose internal instructions.
+  // Inject the planning instructions + research into the synthesis turn, kept
+  // out of the visible chat so it shows only the user's original request and
+  // the model's plan — never the verbose internal instructions. Delivered as a
+  // hidden tail message rather than a system-prompt append so the cached
+  // prefix survives the turn (issue #73 — see _shared/inject.ts).
   pi.on("before_agent_start", async (event) => {
     if (!pendingSynthesis) return;
     const { digest, answers } = pendingSynthesis;
@@ -327,7 +330,7 @@ export default function (pi: ExtensionAPI) {
       `create files.\n\n` +
       `### Research findings\n${digest}\n\n` +
       `### User's answers to clarifying questions\n${answers}`;
-    return { systemPrompt: ((event as any).systemPrompt ?? "") + block };
+    return injectionResult("lc-plan", block, (event as any).systemPrompt ?? "");
   });
 
   // While synthesizing the plan, block any attempt to edit/write files.

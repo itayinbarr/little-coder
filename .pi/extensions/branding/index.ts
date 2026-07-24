@@ -47,7 +47,9 @@ function readVersion(): string {
 
 const VERSION = readVersion();
 
-function buildHeader(theme: Theme, width: number): string[] {
+// Exported for tests: the hint row is the first thing every user reads, so a
+// key listed here that isn't actually bound is a real defect (issue #74).
+export function buildHeader(theme: Theme, width: number): string[] {
   // Brand-book "prompt lockup" (the variant the brand reserves for terminals
   // and dark surfaces): a honey prompt caret, the wordmark in the foreground,
   // and the honey block cursor — "lc▌"'s ready-to-type punchline, applied to
@@ -61,13 +63,18 @@ function buildHeader(theme: Theme, width: number): string[] {
   const tagline = theme.fg("muted", TAGLINE);
   const dim = (s: string) => theme.fg("dim", s);
   const sep = theme.fg("muted", " · ");
+  // Every key here must be one that actually does something at the prompt.
+  // `ctrl-r` used to sit where `ctrl-o` is now: pi binds "expand / more" to
+  // `app.tools.expand` (= ctrl+o), and ctrl+r is only bound inside the session
+  // tree overlay, so the hint pointed at a key that did nothing (issue #74).
   const hints = [
     `${dim("esc")} interrupt`,
     `${dim("ctrl-l/ctrl-c")} clear/exit`,
     `${dim("/")} commands`,
     `${dim("!")} bash`,
-    `${dim("ctrl-r")} more`,
+    `${dim("ctrl-o")} more`,
     `${dim("ctrl-q")} plan`,
+    `${dim("f2")} research`,
     `${dim("ctrl-h")} keys`,
   ].join(sep);
   // pi-tui throws if any rendered line exceeds the terminal width (issue #48).

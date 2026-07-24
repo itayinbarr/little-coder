@@ -58,16 +58,30 @@ describe("normalizeWritePath", () => {
 // old custom tool, so the guard never fired. We now enforce on the `tool_call`
 // event, which catches whichever write implementation runs.
 
+// write-guard registers TWO tool_call handlers — one for the `write` tool, one
+// for shell tools (issue #70). Dispatch to both the way pi's runner does
+// (core/extensions/runner.js::emitToolCall): run them in registration order and
+// return the first result that blocks.
 function getToolCallHandler() {
-  let handler: ((event: any, ctx: any) => any) | undefined;
+  const handlers: Array<(event: any, ctx: any) => any> = [];
   const pi = {
     on(name: string, h: (event: any, ctx: any) => any) {
-      if (name === "tool_call") handler = h;
+      if (name === "tool_call") handlers.push(h);
     },
   };
   setupWriteGuard(pi as any);
-  if (!handler) throw new Error("write-guard did not register a tool_call handler");
-  return handler;
+  if (handlers.length === 0) throw new Error("write-guard did not register a tool_call handler");
+  return async (event: any, ctx: any) => {
+    let last: any;
+    for (const h of handlers) {
+      const result = await h(event, ctx);
+      if (result) {
+        last = result;
+        if (result.block) return result;
+      }
+    }
+    return last;
+  };
 }
 
 function makeCtx(cwd: string) {
@@ -177,6 +191,98 @@ describe("write-guard tool_call interceptor", () => {
       const result = await handler({ toolName: "write", input: { path: name, content: "x" } }, ctx);
       expect(result, `${name} should pass`).toBeUndefined();
     }
+  });
+});
+
+// ── Issue #70: the shell is the same write ─────────────────────────────────
+// Once `write` was refused, Qwen switched to `cat > file << 'EOF'` and got the
+// bytes anyway — the guard only ever looked at the `write` tool, and
+// `ShellSession` wasn't gated at all.
+
+describe("write-guard shell interceptor (issue #70)", () => {
+  let dir: string;
+  let existing: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "wg-sh-"));
+    existing = join(dir, "main.py");
+    writeFileSync(existing, "old content\n");
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("blocks rvanswieten's exact heredoc rewrite of an existing file", async () => {
+    const handler = getToolCallHandler();
+    const ctx = makeCtx(dir);
+    const command = [
+      "cat > main.py << 'ENDOFFILE'",
+      "from fastapi import FastAPI",
+      "ENDOFFILE",
+    ].join("\n");
+    const result = await handler({ toolName: "ShellSession", input: { command } }, ctx);
+    expect(result?.block).toBe(true);
+    expect(result.reason).toContain("already exists");
+    expect(result.reason).toContain('"name": "edit"');
+    expect(ctx.notifies[0]).toMatch(/harness intervention:.*redirected the model to Edit/i);
+  });
+
+  it("blocks it through the bash tool too, and under a different delimiter", async () => {
+    const handler = getToolCallHandler();
+    for (const toolName of ["bash", "Bash", "ShellSession"]) {
+      const command = `cat > main.py << 'MY_OWN_MARKER'\nx\nMY_OWN_MARKER`;
+      const result = await handler({ toolName, input: { command } }, makeCtx(dir));
+      expect(result?.block, toolName).toBe(true);
+    }
+  });
+
+  it("blocks a plain truncating redirect and a tee onto an existing file", async () => {
+    const handler = getToolCallHandler();
+    for (const command of ["echo hi > main.py", "echo hi | tee main.py"]) {
+      const result = await handler({ toolName: "bash", input: { command } }, makeCtx(dir));
+      expect(result?.block, command).toBe(true);
+    }
+  });
+
+  it("allows an append to an existing file — nothing is destroyed", async () => {
+    const handler = getToolCallHandler();
+    const result = await handler(
+      { toolName: "bash", input: { command: "echo hi >> main.py" } },
+      makeCtx(dir),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("allows a redirect that creates a NEW file", async () => {
+    const handler = getToolCallHandler();
+    const result = await handler(
+      { toolName: "bash", input: { command: "echo hi > brand-new.txt" } },
+      makeCtx(dir),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("blocks a redirect to a reserved device name even as an append", async () => {
+    const handler = getToolCallHandler();
+    const result = await handler(
+      { toolName: "bash", input: { command: "echo hi >> nul" } },
+      makeCtx(dir),
+    );
+    expect(result?.block).toBe(true);
+    expect(result.reason).toContain("reserved Windows device name");
+  });
+
+  it("leaves read-only shell commands alone", async () => {
+    const handler = getToolCallHandler();
+    for (const command of ["ls -la", "cat main.py", "make 2>&1", 'grep "a > b" main.py']) {
+      const result = await handler({ toolName: "bash", input: { command } }, makeCtx(dir));
+      expect(result, command).toBeUndefined();
+    }
+  });
+
+  it("ignores shell tools that carry no command", async () => {
+    const handler = getToolCallHandler();
+    const result = await handler({ toolName: "ShellSession", input: {} }, makeCtx(dir));
+    expect(result).toBeUndefined();
   });
 });
 

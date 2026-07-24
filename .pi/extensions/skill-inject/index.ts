@@ -3,12 +3,17 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSkillFile } from "./frontmatter.ts";
+import { injectionResult, makeDedupe } from "../_shared/inject.ts";
 
 // ── Tool-skill registry ─────────────────────────────────────────────────
 // Port of local/skill_augment.py. Loads skills/tools/*.md once, hooks
-// `before_agent_start` to append a `## Tool Usage Guidance` block to the
-// system prompt. Per-user-prompt selection using the whitepaper's 3-priority
-// algorithm (error recovery > recency > intent). Budget-guarded, cached.
+// `before_agent_start` to add a `## Tool Usage Guidance` block to the turn.
+// Per-user-prompt selection using the whitepaper's 3-priority algorithm
+// (error recovery > recency > intent). Budget-guarded, cached.
+//
+// The block is delivered as a tail message rather than appended to the system
+// prompt — see _shared/inject.ts for why (issue #73: it was invalidating the
+// KV cache on every turn).
 
 interface ToolSkill {
   targetTool: string;
@@ -173,6 +178,8 @@ const RESEARCH_DIRECTIVE = [
 ].join("\n");
 
 export default function (pi: ExtensionAPI) {
+  const shouldInject = makeDedupe();
+
   // Track tool usage across the whole session so recency + error-recovery
   // state is available on the next before_agent_start.
   pi.on("tool_result", async (event) => {
@@ -236,8 +243,19 @@ export default function (pi: ExtensionAPI) {
 
     const directive = researchTask ? RESEARCH_DIRECTIVE : "";
 
+    // Order within the block: [tool skill cards] [research directive]. The
+    // directive comes LAST by design — small models show strong recency bias
+    // and the per-task instruction is what we want freshest in their
+    // attention. Delivered at the conversation tail (see _shared/inject.ts),
+    // which is later still than the end of the system prompt.
+    const block = skillBlock + directive;
+
+    // Identical to last turn's block? The previous copy is still in the
+    // conversation, so re-sending it would only burn context.
+    if (!shouldInject(block)) return;
+
     // Fire-and-forget notify so the benchmark harness can count per-turn
-    // skill injections without having to reconstruct the system prompt.
+    // skill injections without having to reconstruct the prompt.
     try {
       const parts: string[] = [];
       if (selected.length > 0) {
@@ -249,10 +267,6 @@ export default function (pi: ExtensionAPI) {
       // UI unavailable in some run modes — silent best-effort
     }
 
-    // Order: [AGENTS.md] [tool skill cards] [research directive].
-    // The directive is the LAST block in the system prompt by design —
-    // small models show strong recency bias and the per-task instruction
-    // is exactly what we want freshest in their attention.
-    return { systemPrompt: (event.systemPrompt ?? "") + skillBlock + directive };
+    return injectionResult("lc-skills", block, event.systemPrompt ?? "");
   });
 }

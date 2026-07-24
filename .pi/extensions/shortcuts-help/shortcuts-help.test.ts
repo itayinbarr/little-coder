@@ -12,6 +12,22 @@ describe("shortcuts-help panelLines", () => {
     expect(text).toContain("/hotkeys"); // pointer to the authoritative list
   });
 
+  it("lists f2 for deep research (issue #74)", () => {
+    // The panel exists to make hotkeys discoverable, and deep research — the
+    // one flow people ask about — was the one key missing from it.
+    const text = panelLines(80).join("\n");
+    expect(text).toContain("f2");
+    expect(text).toContain("deep research");
+  });
+
+  it("does not advertise ctrl-r, which is unbound at the prompt (issue #74)", () => {
+    // pi binds "expand / more" to app.tools.expand (ctrl+o); ctrl+r is only
+    // bound inside the session tree overlay.
+    const text = panelLines(80).join("\n");
+    expect(text).not.toContain("ctrl-r");
+    expect(text).toContain("ctrl-o");
+  });
+
   it("never emits a line wider than the given width (issue #48 safety)", () => {
     for (const width of [20, 30, 40, 80, 120]) {
       for (const line of panelLines(width)) {
