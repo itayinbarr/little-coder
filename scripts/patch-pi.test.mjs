@@ -18,7 +18,8 @@ describe("pi runtime patches", () => {
   });
 
   it("applies cleanly and is idempotent", () => {
-    // Idempotent: safe to run repeatedly (postinstall + every launch + tests).
+    // Idempotent: safe to run repeatedly (every launch + tests). There is no
+    // postinstall any more — little-coder ships no npm install scripts (#75).
     applyPiPatches();
     applyPiPatches();
     const piRoot = resolvePiRoot();
