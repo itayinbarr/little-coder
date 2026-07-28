@@ -68,11 +68,15 @@ export default async function (pi: ExtensionAPI) {
       }
     }
 
+    // pi's ProviderModelConfig.input is typed ("text"|"image")[], but the
+    // registerProvider path stores model entries verbatim (see config.ts), so
+    // we cast through to forward the full modality list (e.g. "video") to the
+    // registry for providers whose current catalog advertises it.
     pi.registerProvider(name, {
       baseUrl: entry.baseUrl,
       apiKey: entry.apiKey,
       api: entry.api,
-      models,
+      models: models as unknown as Parameters<typeof pi.registerProvider>[1]["models"],
     });
 
     if (name === "llamacpp") {
@@ -113,7 +117,7 @@ export default async function (pi: ExtensionAPI) {
         baseUrl: lc.baseUrl,
         apiKey: lc.apiKey,
         api: lc.api,
-        models: lc.models,
+        models: lc.models as unknown as Parameters<typeof pi.registerProvider>[1]["models"],
       });
 
       const from = change.from !== undefined ? formatContextWindow(change.from) : "?";

@@ -109,7 +109,7 @@ export LMSTUDIO_API_KEY=noop
 
 `LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, and `LMSTUDIO_BASE_URL` override the defaults (`http://127.0.0.1:8888/v1`, `http://127.0.0.1:11434/v1`, `http://127.0.0.1:1234/v1`).
 
-For cloud providers, set the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) and pi will discover it.
+For cloud providers, set the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) and pi will discover it. The shipped `models.json` also declares a `minimax` provider against the OpenAI-compatible endpoint (`https://api.minimax.io/v1`); export `MINIMAX_API_KEY` and pick a model with `little-coder --model minimax/MiniMax-M3`. `MINIMAX_BASE_URL` overrides the endpoint (e.g. `https://api.minimaxi.com/v1` for the CN region).
 
 ## Local model setup (optional)
 
@@ -248,7 +248,7 @@ Example — switch the llama.cpp port and bump `qwen3.6-35b-a3b` to a 150K conte
 
 Then verify with `little-coder --list-models` — you should see your overridden entry.
 
-`LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, and `LMSTUDIO_BASE_URL` env vars still beat both files for those three providers.
+`LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, and `MINIMAX_BASE_URL` env vars still beat both files for those providers.
 
 ### Any OpenAI-compatible server (e.g. MLX / omlx)
 
@@ -422,7 +422,7 @@ little-coder/
 │       ├── plan-mode/              # alt+p "research → ask → plan" flow (sub-coders + clarifying questions → written plan)
 │       ├── subagent/              # `dispatch` tool: isolated read/browse-only sub-coders + live tracker (spawn.ts engine)
 │       ├── prompt-history/         # up-arrow recall of recent prompts (from an empty input)
-│       ├── llama-cpp-provider/     # data-driven provider registration from models.json — ships llamacpp, ollama, lmstudio (+ user override file)
+│       ├── llama-cpp-provider/     # data-driven provider registration from models.json — ships llamacpp, ollama, lmstudio, minimax (+ user override file)
 │       ├── write-guard/            # Write refuses on existing files; rewrites root-bare /foo.md paths to cwd
 │       ├── read-guard/             # trims a Read that would overflow the context window to its first 30 lines + a search-instead directive
 │       ├── read-guard-edit/        # Edit refuses until the file has been Read this session

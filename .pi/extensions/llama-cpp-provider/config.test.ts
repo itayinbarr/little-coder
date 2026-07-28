@@ -98,6 +98,11 @@ describe("applyEnvOverrides", () => {
     const out = applyEnvOverrides(providers, { LMSTUDIO_BASE_URL: "http://127.0.0.1:5678/v1" });
     expect(out.lmstudio.baseUrl).toBe("http://127.0.0.1:5678/v1");
   });
+  it("MINIMAX_BASE_URL overrides minimax baseUrl (regional endpoint)", () => {
+    const providers = { minimax: sampleProvider("https://api.minimax.io/v1", "MiniMax-M3") };
+    const out = applyEnvOverrides(providers, { MINIMAX_BASE_URL: "https://api.minimaxi.com/v1" });
+    expect(out.minimax.baseUrl).toBe("https://api.minimaxi.com/v1");
+  });
   it("does not alter providers without a known env knob", () => {
     const providers = { custom: sampleProvider("http://file/v1", "m") };
     const out = applyEnvOverrides(providers, { LLAMACPP_BASE_URL: "http://env/v1" });
@@ -196,9 +201,32 @@ describe("shipped models.json", () => {
     expect(lmstudio.models.find((m) => m.id === "local-model")).toBeDefined();
   });
 
-  it("still registers llamacpp and ollama alongside lmstudio", () => {
+  it("still registers llamacpp and ollama alongside lmstudio and minimax", () => {
     const result = loadProviders(pkgRoot, {});
-    expect(Object.keys(result.providers).sort()).toEqual(["llamacpp", "lmstudio", "ollama"]);
+    expect(Object.keys(result.providers).sort()).toEqual(["llamacpp", "lmstudio", "minimax", "ollama"]);
+  });
+
+  it("registers minimax with the current 1M context, text/image/video, pricing, and thinking", () => {
+    const result = loadProviders(pkgRoot, {});
+    const minimax = result.providers.minimax;
+    expect(minimax, "minimax provider should be present in shipped models.json").toBeDefined();
+    expect(minimax.api).toBe("openai-completions");
+    expect(minimax.baseUrl).toBe("https://api.minimax.io/v1");
+    expect(minimax.apiKey).toBe("MINIMAX_API_KEY");
+
+    const m3 = minimax.models.find((m) => m.id === "MiniMax-M3");
+    expect(m3, "MiniMax-M3 should be registered").toBeDefined();
+    expect(m3!.contextWindow).toBe(1000000);
+    expect(m3!.input).toEqual(["text", "image", "video"]);
+    expect(m3!.cost).toEqual({ input: 0.6, output: 2.4, cacheRead: 0.12, cacheWrite: 0 });
+    expect(m3!.thinking).toEqual(["adaptive", "disabled"]);
+
+    const m27 = minimax.models.find((m) => m.id === "MiniMax-M2.7");
+    expect(m27, "MiniMax-M2.7 should be registered").toBeDefined();
+    expect(m27!.contextWindow).toBe(204800);
+    expect(m27!.input).toEqual(["text"]);
+    expect(m27!.cost).toEqual({ input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 });
+    expect(m27!.thinking).toEqual(["always_on"]);
   });
 });
 

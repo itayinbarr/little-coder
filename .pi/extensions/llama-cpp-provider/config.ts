@@ -8,7 +8,7 @@
 //         "api": "openai-completions",
 //         "baseUrl": "http://...",
 //         "apiKey": "ENV_VAR_NAME",
-//         "models": [ { id, name, reasoning, input, contextWindow, maxTokens, cost }, ... ]
+//         "models": [ { id, name, reasoning, input, contextWindow, maxTokens, cost, thinking? }, ... ]
 //       }, ...
 //     }
 //   }
@@ -20,10 +20,14 @@ export interface ProviderModelEntry {
   id: string;
   name: string;
   reasoning: boolean;
-  input: ("text" | "image")[];
+  input: ("text" | "image" | "video")[];
   contextWindow: number;
   maxTokens: number;
   cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /** Thinking modes the model supports, e.g. ["adaptive", "disabled"] or
+   *  ["always_on"]. Optional; passed through to pi's registerProvider
+   *  verbatim so the model registry can advertise the current modes. */
+  thinking?: string[];
 }
 
 export interface ProviderEntry {
@@ -46,11 +50,13 @@ export interface LoadResult {
 /** Provider env knob: if set, overrides the provider's baseUrl. Originally a
  *  back-compat shim for the two providers we shipped before the data-driven
  *  refactor; kept as the per-provider env-override pattern for any provider
- *  whose baseUrl changes between deployments. */
+ *  whose baseUrl changes between deployments (e.g. the regional endpoint
+ *  override for cloud providers whose baseUrl differs by region). */
 const LEGACY_BASE_URL_ENV: Record<string, string> = {
   llamacpp: "LLAMACPP_BASE_URL",
   ollama: "OLLAMA_BASE_URL",
   lmstudio: "LMSTUDIO_BASE_URL",
+  minimax: "MINIMAX_BASE_URL",
 };
 
 /** Resolution order for the user-override file. First existing path wins. */
@@ -96,7 +102,7 @@ export function fillModelDefaults(m: any, providerName: string, index: number): 
   const defaults = {
     name: m.id,
     reasoning: false,
-    input: ["text"] as ("text" | "image")[],
+    input: ["text"] as ("text" | "image" | "video")[],
     contextWindow: 32768,
     maxTokens: 4096,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
