@@ -43,6 +43,28 @@ describe("assessResponse", () => {
     const prev = [{ name: "Read", input: { file_path: "/b" } }];
     expect(assessResponse("", now, prev, known)).toEqual({ ok: true });
   });
+  it("does not flag a re-run build command when the prior turn also edited a file (#81)", () => {
+    const build = { name: "Bash", input: { command: "npm run build" } };
+    const now = [build];
+    // Prior turn: fixed a source file AND ran the build — re-running the build
+    // now is progress, not a loop, because the Edit changed the environment.
+    const prev = [{ name: "Edit", input: { file_path: "/src/main.ts" } }, build];
+    expect(assessResponse("", now, prev, known)).toEqual({ ok: true });
+  });
+  it("still flags a verbatim repeat when nothing else changed", () => {
+    const build = { name: "Bash", input: { command: "npm run build" } };
+    expect(assessResponse("", [build], [build], known)).toEqual({
+      ok: false, reason: "repeated_tool_call",
+    });
+  });
+  it("still flags a repeat when the only other calls are read-only (#81)", () => {
+    const build = { name: "Bash", input: { command: "npm run build" } };
+    const now = [build];
+    const prev = [{ name: "Read", input: { file_path: "/log" } }, build];
+    expect(assessResponse("", now, prev, known)).toEqual({
+      ok: false, reason: "repeated_tool_call",
+    });
+  });
   it("detects malformed args sentinel", () => {
     const calls = [{ name: "Read", input: { _raw: "garbage" } }];
     expect(assessResponse("", calls, [], known)).toEqual({

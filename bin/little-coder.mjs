@@ -226,6 +226,15 @@ let userExtensionWarnings = [];
 const withPiExtensions =
   process.argv.includes("--with-pi-extensions") || process.env.LITTLE_CODER_PI_EXTENSIONS === "1";
 
+// Start the interactive session already in plan mode (issue #84). The flag is
+// stripped from the args forwarded to pi (below); the plan-mode extension reads
+// LITTLE_CODER_PLAN_MODE from the env at session_start. Not for sub-coder runs,
+// which set their own args and must not inherit plan mode.
+const startInPlanMode =
+  !isSubagent &&
+  (process.argv.includes("--plan-mode") || process.env.LITTLE_CODER_PLAN_MODE === "1");
+if (startInPlanMode) process.env.LITTLE_CODER_PLAN_MODE = "1";
+
 // ---- 5. Update check (best-effort, blocks on TTY prompt only) ----
 let currentVersion = "0.0.0";
 try {
@@ -290,7 +299,11 @@ if (!isSubagent) {
 //
 // Strip our own flags before forwarding to pi so it doesn't reject them.
 const userArgs = process.argv.slice(2).filter(
-  (a) => a !== "--no-update-check" && a !== "--update" && a !== "--with-pi-extensions",
+  (a) =>
+    a !== "--no-update-check" &&
+    a !== "--update" &&
+    a !== "--with-pi-extensions" &&
+    a !== "--plan-mode",
 );
 const agentsMd = join(pkgRoot, "AGENTS.md");
 

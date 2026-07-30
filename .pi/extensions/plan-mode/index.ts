@@ -68,6 +68,17 @@ function setIndicator(ctx: any, on: boolean): void {
   ctx.ui.setWidget(INDICATOR_KEY, on ? indicatorLines() : undefined, { placement: "belowEditor" });
 }
 
+// Whether the session should open already in plan mode (issue #84). Set by the
+// launcher when `--plan-mode` (or LITTLE_CODER_PLAN_MODE=1) is passed. Honored
+// for interactive sessions only — never a headless `--mode`/`-p` run or a
+// read-only sub-coder, which inherit the parent's env but must not plan.
+export function wantsPlanModeAtStart(): boolean {
+  if (process.env.LITTLE_CODER_PLAN_MODE !== "1") return false;
+  if (process.env.LITTLE_CODER_SUBAGENT === "1") return false;
+  const argv = process.argv;
+  return !argv.includes("--mode") && !argv.includes("-p");
+}
+
 // Pull the first balanced JSON array out of a model reply (small models love to
 // wrap JSON in prose / fences). Returns [] on failure so callers can fall back.
 export function extractJsonArray(text: string): any[] {
@@ -376,15 +387,17 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // A new/resumed session resets all plan-mode state.
+  // A new/resumed session resets all plan-mode state. It opens in plan mode when
+  // launched with --plan-mode / LITTLE_CODER_PLAN_MODE=1 (issue #84), otherwise
+  // off as before; ctrl+q still toggles from there.
   pi.on("session_start", async (_event, ctx) => {
-    planModeOn = false;
     orchestrating = false;
     planGuardActive = false;
     synthesisActive = false;
     pendingSynthesis = null;
     if (currentAbort) currentAbort.abort();
     currentAbort = null;
-    setIndicator(ctx, false);
+    planModeOn = wantsPlanModeAtStart();
+    setIndicator(ctx, planModeOn);
   });
 }

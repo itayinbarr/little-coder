@@ -9,6 +9,20 @@ export type QualityResult =
   | { ok: true }
   | { ok: false; reason: string };
 
+// Tools that mutate state the environment then depends on. If the previous turn
+// ran one of these *alongside* a repeated call, re-issuing that call is
+// legitimate progress, not a loop — e.g. Edit a source file, then re-run the
+// same build command (issue #81). Bash/ShellSession count because a shell
+// command can change anything; matching is by lowercased tool name.
+const STATE_CHANGING_TOOLS = new Set([
+  "edit",
+  "write",
+  "multiedit",
+  "notebookedit",
+  "bash",
+  "shellsession",
+]);
+
 export function assessResponse(
   text: string,
   toolCalls: ToolCall[],
@@ -28,12 +42,23 @@ export function assessResponse(
     }
   }
 
-  // 3. Repeated tool call loop (exact name+input match with previous turn)
+  // 3. Repeated tool call loop (exact name+input match with previous turn).
+  //    A verbatim repeat is only a loop when nothing could have changed the
+  //    outcome. If the previous turn ran a state-changing tool *other than* the
+  //    repeated call itself (e.g. an Edit next to a re-run build command), the
+  //    environment plausibly changed, so re-issuing the call is progress — not a
+  //    loop (issue #81).
   if (toolCalls.length > 0 && recentToolCalls.length > 0) {
     for (const tc of toolCalls) {
+      const tcInput = JSON.stringify(tc.input);
       for (const prev of recentToolCalls) {
-        if (tc.name === prev.name &&
-            JSON.stringify(tc.input) === JSON.stringify(prev.input)) {
+        if (tc.name === prev.name && JSON.stringify(prev.input) === tcInput) {
+          const envChanged = recentToolCalls.some((r) => {
+            const isRepeatedCall =
+              r.name === tc.name && JSON.stringify(r.input) === tcInput;
+            return !isRepeatedCall && STATE_CHANGING_TOOLS.has(r.name.toLowerCase());
+          });
+          if (envChanged) continue;
           return { ok: false, reason: "repeated_tool_call" };
         }
       }

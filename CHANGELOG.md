@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.13.0] — 2026-07-30
+
+### Added
+- **`--plan-mode` starts a session already in Plan Mode** ([#84](https://github.com/itayinbarr/little-coder/issues/84) by [@aole](https://github.com/aole)). `little-coder --plan-mode` (or `LITTLE_CODER_PLAN_MODE=1`) opens with the `◆ PLAN MODE` indicator on; `ctrl+q` still toggles. Interactive sessions only — headless and sub-coder runs ignore it.
+
+### Fixed
+- **Re-running a build command after editing a file is no longer mis-flagged as a loop** ([#81](https://github.com/itayinbarr/little-coder/issues/81) by [@manueloverride](https://github.com/manueloverride), workaround by [@Franck-Nein](https://github.com/Franck-Nein)). The quality monitor now skips its "repeated tool call" verdict when the previous turn also ran a state-changing tool (Edit/Write/Bash), since the environment changed between the two identical calls. A verbatim repeat with nothing else changing is still caught.
+
+---
+
 ## [v1.12.0] — 2026-07-24
 
 ### Fixed

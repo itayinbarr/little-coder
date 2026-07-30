@@ -69,7 +69,7 @@ The agent uses the directory you launched it from as its working directory — `
 
 ### Interactive features
 
-- **Plan Mode** — press **ctrl+q** to toggle (a `◆ PLAN MODE` indicator shows below the input). Submit a request and little-coder researches it with sub-coders, asks you 1-3 clarifying questions (each with suggested answers and a free-text option), then writes a plan in the chat instead of editing anything. **Esc** cancels a plan mid-run. (**shift+tab** stays pi's thinking-level cycle.)
+- **Plan Mode** — press **ctrl+q** to toggle (a `◆ PLAN MODE` indicator shows below the input), or launch with **`--plan-mode`** (`LITTLE_CODER_PLAN_MODE=1`) to start there. Submit a request and little-coder researches it with sub-coders, asks you 1-3 clarifying questions (each with suggested answers and a free-text option), then writes a plan in the chat instead of editing anything. **Esc** cancels a plan mid-run. (**shift+tab** stays pi's thinking-level cycle.)
 - **Deep Research** — press **f2** (or run `/deep-research <topic>`) to scope a topic into a research brief, fan out read-only research sub-coders, and get back one cited markdown report, saved next to your working directory. **Esc** cancels mid-run.
 - **Keyboard shortcuts** — press **ctrl+h** for a panel of the keys worth knowing; `/hotkeys` is the full reference. **ctrl+o** expands tool output ("more"), **ctrl+t** toggles thinking blocks, **ctrl+p** cycles models.
 - **Prompt history** — from an empty input, **↑** recalls your recent prompts (most-recent first), **↓** walks forward. History persists across sessions, so a fresh session can recall prompts from earlier runs.
