@@ -2,6 +2,17 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.14.0] — 2026-07-31
+
+### Changed
+- **Bundled pi upgraded 0.79.4 → 0.83.0** ([#85](https://github.com/itayinbarr/little-coder/issues/85) by [@m00kfu](https://github.com/m00kfu)). Modern third-party extensions that import newer pi-ai paths (e.g. `pi-ai/…/compat`) now resolve instead of failing to load. Our runtime patch was re-based onto pi 0.83 and the full test suite re-verified against it.
+
+### Fixed
+- **`/dev/null` redirects are no longer blocked** ([#87](https://github.com/itayinbarr/little-coder/issues/87) by [@manueloverride](https://github.com/manueloverride)). The shell-write guard counted `2>/dev/null` as a destructive file write; it now exempts the null-ish character devices (`/dev/null`, `/dev/stdout`, `/dev/stderr`, `/dev/tty`, `/dev/zero`, `/dev/random`, `/dev/fd/N`). A redirect to a real file alongside them is still caught.
+- **A backend that rejects the thinking level no longer loops on "empty response"** ([#86](https://github.com/itayinbarr/little-coder/issues/86) by [@aole](https://github.com/aole)). A provider 400 (e.g. an ollama model that doesn't support thinking) is now treated as an error turn, not an empty model response, so it isn't re-sent three times over pi's real error — which is shown, with a one-line hint to lower the thinking level.
+
+---
+
 ## [v1.13.0] — 2026-07-30
 
 ### Added

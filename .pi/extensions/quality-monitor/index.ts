@@ -40,6 +40,27 @@ export default function (pi: ExtensionAPI) {
     // thinking-budget cascade). An aborted turn is not a model quality failure.
     if (message.stopReason === "aborted") return;
 
+    // Skip turns that ended in a provider/transport error (pi marks these
+    // stopReason "error"). An API 400 — e.g. an ollama model that rejects the
+    // requested thinking level (issue #86) — leaves the content empty, which
+    // `assessResponse` would read as `empty_response` and "correct" by re-sending
+    // the same request 3× before backing off, burying pi's real error under
+    // three "your previous response was empty" lines. Steering a correction
+    // can't fix a 400. pi already renders the actual error; we add one targeted
+    // hint for the thinking case, whose fix (lower the thinking level) isn't
+    // obvious from the raw message, then stop.
+    if (message.stopReason === "error") {
+      const errMsg = typeof message.errorMessage === "string" ? message.errorMessage : "";
+      if (/does not support thinking|reasoning setting .*is not supported/i.test(errMsg)) {
+        harnessIntervention(
+          ctx,
+          "this model rejected the requested thinking level — lower it with " +
+            "shift+tab (thinking cycle) or in /settings, or pick a model that supports thinking.",
+        );
+      }
+      return;
+    }
+
     // Extract assistant text + tool calls from pi's content-block format
     const content = Array.isArray(message.content) ? message.content : [];
     const text = content

@@ -166,6 +166,31 @@ function isFdTarget(target: string): boolean {
   return target.startsWith("&");
 }
 
+// Redirecting to one of the kernel's special character devices destroys no
+// file — `2>/dev/null` discards output, `>/dev/stdout` re-plumbs a stream — so
+// the write guards must not treat these as file writes (issue #87). `/dev/null`
+// is the overwhelmingly common one; small models emit it constantly.
+// `/dev/fd/N` is fd plumbing by another spelling. Matched case-sensitively:
+// these are the real POSIX device paths, not arbitrary files. Windows `nul` is
+// deliberately NOT exempted here — write-guard blocks it as a reserved device
+// name (issue #60) so a POSIX run can't author a landmine file named `nul`.
+const NON_DESTRUCTIVE_TARGETS = new Set([
+  "/dev/null",
+  "/dev/stdout",
+  "/dev/stderr",
+  "/dev/stdin",
+  "/dev/tty",
+  "/dev/zero",
+  "/dev/full",
+  "/dev/random",
+  "/dev/urandom",
+]);
+
+/** True for a redirect target that can't destroy a real file. */
+export function isNonDestructiveTarget(path: string): boolean {
+  return NON_DESTRUCTIVE_TARGETS.has(path) || /^\/dev\/fd\/\d+$/.test(path);
+}
+
 /**
  * Every path `cmd` writes to via shell redirection or a write-by-design tool.
  *
@@ -219,10 +244,12 @@ export function detectWriteTargets(raw: string): ShellWrite[] {
     }
   }
 
-  // De-duplicate by path, keeping the first kind seen.
+  // De-duplicate by path, keeping the first kind seen. Non-destructive device
+  // targets (/dev/null, /dev/stderr, …) are dropped — redirecting to them
+  // writes no file the guard needs to protect (issue #87).
   const seen = new Set<string>();
   return writes.filter((w) => {
-    if (!w.path || seen.has(w.path)) return false;
+    if (!w.path || seen.has(w.path) || isNonDestructiveTarget(w.path)) return false;
     seen.add(w.path);
     return true;
   });

@@ -160,4 +160,38 @@ describe("quality-monitor turn_end", () => {
     expect(h.followUps).toHaveLength(0);
     expect(h.notifies).toHaveLength(0);
   });
+
+  it("does not steer an empty-response correction on a provider error turn (#86)", async () => {
+    // A 400 from the backend arrives as stopReason "error" with empty content.
+    // It must NOT be treated as an empty model response and re-sent.
+    await fire(h, "turn_end", {
+      message: {
+        stopReason: "error",
+        errorMessage: '400 "gemma-4-26B" does not support thinking',
+        content: [],
+      },
+    });
+    expect(h.followUps).toHaveLength(0);
+  });
+
+  it("adds a one-time hint when the error is a thinking rejection (#86)", async () => {
+    await fire(h, "turn_end", {
+      message: {
+        stopReason: "error",
+        errorMessage: '400 "gemma-4-26B" does not support thinking',
+        content: [],
+      },
+    });
+    // No correction is steered, but a user-facing hint about the thinking level fires.
+    expect(h.followUps).toHaveLength(0);
+    expect(h.notifies.join("\n")).toMatch(/thinking level/i);
+  });
+
+  it("stays silent on an unrelated provider error (#86)", async () => {
+    await fire(h, "turn_end", {
+      message: { stopReason: "error", errorMessage: "500 upstream timeout", content: [] },
+    });
+    expect(h.followUps).toHaveLength(0);
+    expect(h.notifies).toHaveLength(0);
+  });
 });

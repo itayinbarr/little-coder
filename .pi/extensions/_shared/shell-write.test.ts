@@ -93,6 +93,35 @@ describe("detectWriteTargets — must not false-positive", () => {
   });
 });
 
+describe("detectWriteTargets — non-destructive devices (issue #87)", () => {
+  it("does not flag a redirect to /dev/null", () => {
+    expect(detectWriteTargets('grep -ri "x" ~/.config/ 2>/dev/null')).toEqual([]);
+    expect(detectWriteTargets("cmd >/dev/null 2>&1")).toEqual([]);
+    expect(hasWriteRedirection("make 2>/dev/null")).toBe(false);
+  });
+  it("does not flag the other null-ish char devices", () => {
+    expect(detectWriteTargets("cmd > /dev/stdout")).toEqual([]);
+    expect(detectWriteTargets("cmd 2> /dev/stderr")).toEqual([]);
+    expect(detectWriteTargets("cmd > /dev/tty")).toEqual([]);
+    expect(detectWriteTargets("cmd > /dev/fd/2")).toEqual([]);
+    expect(detectWriteTargets("echo x | tee /dev/null")).toEqual([]);
+    expect(detectWriteTargets("dd if=big.img of=/dev/null")).toEqual([]);
+  });
+  it("still flags a redirect to a real file next to a /dev/null one", () => {
+    expect(detectWriteTargets("cmd >out.log 2>/dev/null")).toEqual([
+      { path: "out.log", kind: "redirect" },
+    ]);
+  });
+  it("does not exempt an ordinary file that merely lives under a dev-like name", () => {
+    expect(detectWriteTargets("cmd > /dev/null.bak")).toEqual([
+      { path: "/dev/null.bak", kind: "redirect" },
+    ]);
+    expect(detectWriteTargets("cmd > devnull")).toEqual([
+      { path: "devnull", kind: "redirect" },
+    ]);
+  });
+});
+
 describe("splitCommandChain", () => {
   it("splits on unquoted chain operators", () => {
     expect(splitCommandChain("ls && rm -rf / ; echo done | wc -l")).toEqual([

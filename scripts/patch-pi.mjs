@@ -35,19 +35,14 @@ const ABORT_MARKER_PATCH = {
   rel: "dist/modes/interactive/components/assistant-message.js",
   // Skip if our edit is already present (idempotency).
   applied: 'little-coder patch: suppress the bare "Operation aborted" marker',
-  // Exact original block shipped by pi 0.75.x. If it doesn't match (pi changed),
+  // Exact original block shipped by pi 0.83.x. If it doesn't match (pi changed),
   // we skip silently rather than guess.
   find:
     '                const abortMessage = message.errorMessage && message.errorMessage !== "Request was aborted"\n' +
     "                    ? message.errorMessage\n" +
     '                    : "Operation aborted";\n' +
-    "                if (hasVisibleContent) {\n" +
-    "                    this.contentContainer.addChild(new Spacer(1));\n" +
-    "                }\n" +
-    "                else {\n" +
-    "                    this.contentContainer.addChild(new Spacer(1));\n" +
-    "                }\n" +
-    "                this.contentContainer.addChild(new Text(theme.fg(\"error\", abortMessage), 1, 0));",
+    "                this.contentContainer.addChild(new Spacer(1));\n" +
+    "                this.contentContainer.addChild(new Text(theme.fg(\"error\", abortMessage), this.outputPad, 0));",
   replace:
     '                // little-coder patch: suppress the bare "Operation aborted" marker.\n' +
     "                // Harness interventions surface their own single\n" +
@@ -58,7 +53,7 @@ const ABORT_MARKER_PATCH = {
     "                    : null;\n" +
     "                if (abortMessage) {\n" +
     "                    this.contentContainer.addChild(new Spacer(1));\n" +
-    "                    this.contentContainer.addChild(new Text(theme.fg(\"error\", abortMessage), 1, 0));\n" +
+    "                    this.contentContainer.addChild(new Text(theme.fg(\"error\", abortMessage), this.outputPad, 0));\n" +
     "                }",
 };
 
