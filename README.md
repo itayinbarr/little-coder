@@ -353,7 +353,7 @@ Two env vars control the gate:
 
 | Env var | Values | Effect |
 |---|---|---|
-| `LITTLE_CODER_PERMISSION_MODE` | `auto` *(default)* / `accept-all` / `manual` | `auto`: block any shell command not on the whitelist. `accept-all`: skip the gate entirely, every shell call passes (the benchmark runner sets this). `manual`: same as `auto` but with a different rejection message. |
+| `LITTLE_CODER_PERMISSION_MODE` | `auto` *(default)* / `accept-all` / `manual` | `auto`: block any shell command not on the whitelist. `accept-all`: skip the gate entirely, every shell call passes (the benchmark runner sets this). `manual`: prompt for confirmation before every shell command — the command is shown and you choose to execute (`y`) or cancel (`n`). |
 | `LITTLE_CODER_BASH_ALLOW` | comma-separated prefixes | Extra allow-prefixes merged with the built-in list. **Trailing whitespace is meaningful**: `"make "` allows `make test` but not `makefoo`; `"make"` allows both. |
 
 Examples:
