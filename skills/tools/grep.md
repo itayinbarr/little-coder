@@ -1,12 +1,12 @@
 ---
 name: grep-guidance
 type: tool-guidance
-target_tool: Grep
+target_tool: grep
 priority: 8
 token_cost: 100
 user-invocable: false
 ---
-## Grep Tool
+## `grep` Tool
 Search file contents with regex. Uses ripgrep.
 
 REQUIRED: pattern (regex pattern)
@@ -21,10 +21,10 @@ RULES:
 
 EXAMPLE:
 ```tool
-{"name": "Grep", "input": {"pattern": "def main", "glob": "*.py"}}
+{"name": "grep", "input": {"pattern": "def main", "glob": "*.py"}}
 ```
 
 EXAMPLE with path:
 ```tool
-{"name": "Grep", "input": {"pattern": "TODO|FIXME", "path": "/path/to/project/"}}
+{"name": "grep", "input": {"pattern": "TODO|FIXME", "path": "/path/to/project/"}}
 ```

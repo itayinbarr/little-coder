@@ -32,19 +32,19 @@ let lastFailedTool: string | null = null;
 
 // ── Intent keywords → likely tools ──────────────────────────────────────
 const INTENT_MAP: Record<string, string[]> = {
-  read: ["Read"], show: ["Read"], view: ["Read"], cat: ["Read"],
-  write: ["Write"], create: ["Write", "Bash"],
-  implement: ["Write", "Read"], code: ["Write", "Read"],
-  function: ["Write", "Edit"], class: ["Write", "Edit"],
-  edit: ["Edit"], change: ["Edit"], modify: ["Edit"],
-  fix: ["Edit"], update: ["Edit"], replace: ["Edit"],
-  add: ["Edit", "Write"], refactor: ["Edit", "Read"],
-  run: ["Bash"], execute: ["Bash"], install: ["Bash"],
-  build: ["Bash"], test: ["Bash"],
-  find: ["Glob", "Grep"], search: ["Grep"],
-  grep: ["Grep"], glob: ["Glob"],
-  fetch: ["WebFetch"], download: ["WebFetch"], url: ["WebFetch"],
-  web: ["WebSearch"],
+  read: ["read"], show: ["read"], view: ["read"], cat: ["read"],
+  write: ["write"], create: ["write", "bash"],
+  implement: ["write", "read"], code: ["write", "read"],
+  function: ["write", "edit"], class: ["write", "edit"],
+  edit: ["edit"], change: ["edit"], modify: ["edit"],
+  fix: ["edit"], update: ["edit"], replace: ["edit"],
+  add: ["edit", "write"], refactor: ["edit", "read"],
+  run: ["bash"], execute: ["bash"], install: ["bash"],
+  build: ["bash"], test: ["bash"],
+  find: ["glob", "grep"], search: ["grep"],
+  grep: ["grep"], glob: ["glob"],
+  fetch: ["webfetch"], download: ["webfetch"], url: ["webfetch"],
+  web: ["websearch"],
   // Research / browser / evidence
   research: ["BrowserNavigate", "BrowserExtract", "EvidenceAdd"],
   researching: ["BrowserNavigate", "BrowserExtract", "EvidenceAdd"],
@@ -141,7 +141,7 @@ function buildBlock(selected: ToolSkill[]): string {
 // Keyword-triggered directive: when the user's prompt smells like a
 // research / web-lookup task, prepend an explicit "browse-first, then
 // edit-write" rule. Without it, qwen-class small models often skip
-// straight to Edit/Write on free-form questions, never gathering evidence.
+// straight to edit/write on free-form questions, never gathering evidence.
 const RESEARCH_TRIGGERS = [
   /\bbrows(?:e|ing|er)\b/i,
   /\bonline\b/i,
@@ -170,10 +170,10 @@ const RESEARCH_DIRECTIVE = [
   "",
   "## Research-first directive",
   "This task involves online research. Before producing a final answer:",
-  "1. Use BrowserNavigate / BrowserExtract (or WebSearch for first hops) to gather facts.",
+  "1. Use BrowserNavigate / BrowserExtract (or websearch for first hops) to gather facts.",
   "2. Save each citable fact via EvidenceAdd before relying on it.",
-  "3. Only after evidence is in place should you consider any Edit/Write tool calls.",
-  "Skipping the gather step (going straight to Edit/Write or guessing from memory) is wrong — restart with the browse step instead.",
+  "3. Only after evidence is in place should you consider any edit/write tool calls.",
+  "Skipping the gather step (going straight to edit/write or guessing from memory) is wrong — restart with the browse step instead.",
   "",
 ].join("\n");
 

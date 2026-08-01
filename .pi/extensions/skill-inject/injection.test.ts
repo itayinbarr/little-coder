@@ -50,6 +50,14 @@ describe("skill-inject still injects after the #73 conversion", () => {
     expect(result.systemPrompt).toBeUndefined();
   });
 
+  it("injects the registered lowercase bash tool name", async () => {
+    const handler = handlerFor(setupSkillInject);
+    const result = await handler(turn("run ls please"), ctx);
+
+    expect(result?.message.content).toContain('"name": "bash"');
+    expect(result.message.content).not.toContain('"name": "Bash"');
+  });
+
   it("still appends the research directive last, ahead of nothing", async () => {
     const handler = handlerFor(setupSkillInject);
     const result = await handler(turn("research the history of the transistor online"), ctx);
