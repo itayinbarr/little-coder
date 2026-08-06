@@ -59,11 +59,26 @@ export function writeCache(latest, now = Date.now()) {
   }
 }
 
-// Compare semver strings. Only handles X.Y.Z[+pre]. Returns 1 if a > b,
+// Accept only a well-formed X.Y.Z[-prerelease] version. The npm registry always
+// serves valid semver, so this rejects nothing legitimate — it refuses a
+// malformed or hostile `latest` before it reaches compareSemver (which would do
+// NaN math on it) or the Windows self-update sink `cmd.exe /c npm install
+// little-coder@<latest>`, where a shell metacharacter in the version string
+// would otherwise be re-parsed by cmd.exe as a chained command.
+export function isSemver(v) {
+  return typeof v === "string" && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v);
+}
+
+// Compare semver strings. Only handles X.Y.Z[-pre]. Returns 1 if a > b,
 // -1 if a < b, 0 if equal. Pre-release suffixes are treated as < release.
 export function compareSemver(a, b) {
   const parse = (v) => {
-    const [core, pre] = String(v).split("-", 2);
+    // Split at the FIRST hyphen only: a prerelease tag may itself contain
+    // hyphens (`1.0.0-rc-1`), and split("-", 2) would truncate its tail.
+    const s = String(v);
+    const h = s.indexOf("-");
+    const core = h < 0 ? s : s.slice(0, h);
+    const pre = h < 0 ? "" : s.slice(h + 1);
     const parts = core.split(".").map((n) => parseInt(n, 10));
     return {
       major: parts[0] || 0,
@@ -91,7 +106,7 @@ async function fetchLatest() {
     const res = await fetch(REGISTRY, { signal: ctrl.signal });
     if (!res.ok) return null;
     const json = await res.json();
-    return typeof json?.version === "string" ? json.version : null;
+    return isSemver(json?.version) ? json.version : null;
   } catch {
     return null;
   } finally {

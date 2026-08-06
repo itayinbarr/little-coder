@@ -3,49 +3,46 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSkillFile } from "../skill-inject/frontmatter.ts";
+import { scoreEntry, MIN_SCORE_THRESHOLD, type KnowledgeEntry } from "./index.ts";
 
-// Duplicate scoring so tests can exercise it as a pure function.
-function scoreEntry(userText: string, keywords: string[]): number {
-  if (keywords.length === 0) return 0;
-  const textLower = userText.toLowerCase();
-  const words = new Set(textLower.split(/\s+/).filter(Boolean));
-  let score = 0;
-  for (const kw of keywords) {
-    if (kw.includes(" ")) {
-      if (textLower.includes(kw)) score += 2.0;
-    } else {
-      if (words.has(kw)) score += 1.0;
-    }
-  }
-  return score;
+// Exercise the REAL scoreEntry (imported above), not a hand-copied duplicate —
+// a regression in the production scorer must fail this test. Only `keywords`
+// affects the score, so the other KnowledgeEntry fields are inert here.
+function entry(keywords: string[]): KnowledgeEntry {
+  return { topic: "t", body: "b", tokenCost: 0, keywords, requiresTools: [] };
 }
 
 describe("knowledge entry scoring", () => {
   it("scores single word matches at 1.0 each", () => {
-    expect(scoreEntry("find the bucket", ["bucket"])).toBe(1.0);
-    expect(scoreEntry("find the bucket and pour", ["bucket", "pour"])).toBe(2.0);
+    expect(scoreEntry("find the bucket", entry(["bucket"]))).toBe(1.0);
+    expect(scoreEntry("find the bucket and pour", entry(["bucket", "pour"]))).toBe(2.0);
   });
 
   it("scores bigram/phrase matches at 2.0 each", () => {
-    expect(scoreEntry("minimum moves to solve", ["minimum moves"])).toBe(2.0);
-    expect(scoreEntry("state space search", ["state space"])).toBe(2.0);
+    expect(scoreEntry("minimum moves to solve", entry(["minimum moves"]))).toBe(2.0);
+    expect(scoreEntry("state space search", entry(["state space"]))).toBe(2.0);
   });
 
   it("combines word + bigram scores", () => {
     const kw = ["bucket", "minimum moves", "pour"];
     // "bucket" word (1.0) + "minimum moves" phrase (2.0) + "pour" word (1.0) = 4.0
-    expect(scoreEntry("bucket pouring problem with minimum moves and pour", kw)).toBe(4.0);
+    expect(scoreEntry("bucket pouring problem with minimum moves and pour", entry(kw))).toBe(4.0);
   });
 
   it("does not match partial words", () => {
     // 'bucket' shouldn't match 'buckets' because the scorer tokenizes on whitespace
-    expect(scoreEntry("many buckets here", ["bucket"])).toBe(0);
+    expect(scoreEntry("many buckets here", entry(["bucket"]))).toBe(0);
+  });
+
+  it("scores 0 for an entry with no keywords", () => {
+    expect(scoreEntry("anything at all", entry([]))).toBe(0);
   });
 
   it("threshold at 2.0 requires at least two signals", () => {
     // The extension's MIN_SCORE_THRESHOLD = 2.0 means one word isn't enough
-    expect(scoreEntry("find bucket", ["bucket", "pour"])).toBeLessThan(2.0);
-    expect(scoreEntry("bucket pour together", ["bucket", "pour"])).toBeGreaterThanOrEqual(2.0);
+    expect(MIN_SCORE_THRESHOLD).toBe(2.0);
+    expect(scoreEntry("find bucket", entry(["bucket", "pour"]))).toBeLessThan(MIN_SCORE_THRESHOLD);
+    expect(scoreEntry("bucket pour together", entry(["bucket", "pour"]))).toBeGreaterThanOrEqual(MIN_SCORE_THRESHOLD);
   });
 });
 
