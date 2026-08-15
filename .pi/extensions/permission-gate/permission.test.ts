@@ -95,12 +95,12 @@ describe("permission-gate tool_call interceptor", () => {
     return handler;
   }
 
-  function withMode<T>(mode: string | undefined, fn: () => T): T {
+  async function withMode<T>(mode: string | undefined, fn: () => T | Promise<T>): Promise<T> {
     const prev = process.env.LITTLE_CODER_PERMISSION_MODE;
     if (mode === undefined) delete process.env.LITTLE_CODER_PERMISSION_MODE;
     else process.env.LITTLE_CODER_PERMISSION_MODE = mode;
     try {
-      return fn();
+      return await fn();
     } finally {
       if (prev === undefined) delete process.env.LITTLE_CODER_PERMISSION_MODE;
       else process.env.LITTLE_CODER_PERMISSION_MODE = prev;
