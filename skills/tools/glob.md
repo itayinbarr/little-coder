@@ -1,12 +1,12 @@
 ---
 name: glob-guidance
 type: tool-guidance
-target_tool: Glob
+target_tool: glob
 priority: 8
 token_cost: 80
 user-invocable: false
 ---
-## Glob Tool
+## `glob` Tool
 Find files matching a glob pattern.
 
 REQUIRED: pattern (glob pattern like "**/*.py")
@@ -19,10 +19,10 @@ RULES:
 
 EXAMPLE:
 ```tool
-{"name": "Glob", "input": {"pattern": "**/*.py"}}
+{"name": "glob", "input": {"pattern": "**/*.py"}}
 ```
 
 EXAMPLE with path:
 ```tool
-{"name": "Glob", "input": {"pattern": "*.md", "path": "/path/to/docs/"}}
+{"name": "glob", "input": {"pattern": "*.md", "path": "/path/to/docs/"}}
 ```

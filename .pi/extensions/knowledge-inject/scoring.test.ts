@@ -73,6 +73,6 @@ describe("knowledge directory loads from repo", () => {
 
   it("workspace_docs declares requires_tools", () => {
     const parsed = parseSkillFile(readFileSync(join(kDir, "workspace_docs.md"), "utf-8"));
-    expect(parsed!.frontmatter.requires_tools).toEqual(["Read", "Glob"]);
+    expect(parsed!.frontmatter.requires_tools).toEqual(["read", "glob"]);
   });
 });

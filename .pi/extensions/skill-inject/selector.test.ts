@@ -8,19 +8,19 @@ import { parseSkillFile } from "./frontmatter.ts";
 // index.ts). These are pure functions; extension integration tested via RPC.
 
 const INTENT_MAP: Record<string, string[]> = {
-  read: ["Read"], show: ["Read"], view: ["Read"], cat: ["Read"],
-  write: ["Write"], create: ["Write", "Bash"],
-  implement: ["Write", "Read"], code: ["Write", "Read"],
-  function: ["Write", "Edit"], class: ["Write", "Edit"],
-  edit: ["Edit"], change: ["Edit"], modify: ["Edit"],
-  fix: ["Edit"], update: ["Edit"], replace: ["Edit"],
-  add: ["Edit", "Write"], refactor: ["Edit", "Read"],
-  run: ["Bash"], execute: ["Bash"], install: ["Bash"],
-  build: ["Bash"], test: ["Bash"],
-  find: ["Glob", "Grep"], search: ["Grep"],
-  grep: ["Grep"], glob: ["Glob"],
-  fetch: ["WebFetch"], download: ["WebFetch"], url: ["WebFetch"],
-  web: ["WebSearch"],
+  read: ["read"], show: ["read"], view: ["read"], cat: ["read"],
+  write: ["write"], create: ["write", "bash"],
+  implement: ["write", "read"], code: ["write", "read"],
+  function: ["write", "edit"], class: ["write", "edit"],
+  edit: ["edit"], change: ["edit"], modify: ["edit"],
+  fix: ["edit"], update: ["edit"], replace: ["edit"],
+  add: ["edit", "write"], refactor: ["edit", "read"],
+  run: ["bash"], execute: ["bash"], install: ["bash"],
+  build: ["bash"], test: ["bash"],
+  find: ["glob", "grep"], search: ["grep"],
+  grep: ["grep"], glob: ["glob"],
+  fetch: ["webfetch"], download: ["webfetch"], url: ["webfetch"],
+  web: ["websearch"],
 };
 
 function predictTools(userText: string): string[] {
@@ -34,22 +34,22 @@ function predictTools(userText: string): string[] {
 }
 
 describe("intent prediction (INTENT_MAP)", () => {
-  it("predicts Read for 'read config.py'", () => {
-    expect(predictTools("read config.py and show me the output")).toContain("Read");
-    expect(predictTools("read config.py and show me the output")).toContain("Read");
+  it("predicts read for 'read config.py'", () => {
+    expect(predictTools("read config.py and show me the output")).toContain("read");
+    expect(predictTools("read config.py and show me the output")).toContain("read");
   });
-  it("predicts Edit for 'fix the bug'", () => {
+  it("predicts edit for 'fix the bug'", () => {
     const p = predictTools("please fix the bug in auth.py");
-    expect(p).toContain("Edit");
+    expect(p).toContain("edit");
   });
-  it("predicts Bash for 'run the tests'", () => {
+  it("predicts bash for 'run the tests'", () => {
     const p = predictTools("run the tests and build the project");
-    expect(p).toContain("Bash");
+    expect(p).toContain("bash");
   });
-  it("predicts Glob+Grep for 'find all files'", () => {
+  it("predicts glob+grep for 'find all files'", () => {
     const p = predictTools("find all files matching the pattern");
-    expect(p).toContain("Glob");
-    expect(p).toContain("Grep");
+    expect(p).toContain("glob");
+    expect(p).toContain("grep");
   });
   it("empty predictions for neutral prompts", () => {
     expect(predictTools("hello there")).toEqual([]);
@@ -83,8 +83,21 @@ describe("skills directory loads from repo", () => {
       const t = parsed?.frontmatter.target_tool;
       if (typeof t === "string") targets.add(t);
     }
-    for (const core of ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch"]) {
+    for (const core of ["read", "write", "edit", "bash", "glob", "grep", "webfetch"]) {
       expect(targets.has(core), `expected target_tool=${core}`).toBe(true);
+    }
+  });
+
+  it("uses target_tool names in JSON call examples", () => {
+    const files = readdirSync(toolsDir).filter((f) => f.endsWith(".md"));
+    for (const file of files) {
+      const parsed = parseSkillFile(readFileSync(join(toolsDir, file), "utf-8"));
+      const target = parsed?.frontmatter.target_tool;
+      const exampleBlocks = [...(parsed?.body ?? "").matchAll(/```tool\s*\n([\s\S]*?)```/g)];
+      for (const match of exampleBlocks) {
+        const call = JSON.parse(match[1]);
+        expect(call.name, `${file} example should use target_tool=${target}`).toBe(target);
+      }
     }
   });
 });

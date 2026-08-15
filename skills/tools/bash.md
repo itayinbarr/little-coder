@@ -1,12 +1,12 @@
 ---
 name: bash-guidance
 type: tool-guidance
-target_tool: Bash
+target_tool: bash
 priority: 10
 token_cost: 120
 user-invocable: false
 ---
-## Bash Tool
+## `bash` Tool
 Execute a shell command and return stdout+stderr.
 
 REQUIRED: command (shell command string)
@@ -20,10 +20,10 @@ RULES:
 
 EXAMPLE:
 ```tool
-{"name": "Bash", "input": {"command": "ls -la /path/to/project/"}}
+{"name": "bash", "input": {"command": "ls -la /path/to/project/"}}
 ```
 
 EXAMPLE with timeout:
 ```tool
-{"name": "Bash", "input": {"command": "pip install requests", "timeout": 120}}
+{"name": "bash", "input": {"command": "pip install requests", "timeout": 120}}
 ```
