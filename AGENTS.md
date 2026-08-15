@@ -25,7 +25,8 @@ Instead, proactively write the necessary background script (Python, Bash, etc.) 
 - **`read`**: Read file contents with line numbers
 - **`write`**: Create a NEW file. **Refuses if the file already exists** — this is a runtime invariant, not guidance. When it refuses you get back the exact `edit` call-shape for the same path; follow it.
 - **`edit`**: Replace exact text in a file. `old_string` must match exactly (including whitespace). If it appears multiple times, pass `replace_all: true` or add more context to make it unique.
-- **`bash`** (Polyglot / local REPL) / **`ShellSession`** (Terminal-Bench): Execute shell commands. Default timeout is 30 s. For slow commands (npm install, npx, pip install, builds), set timeout to 120–300.
+- **`bash`** (Polyglot / local REPL) / **`ShellSession`** (Terminal-Bench): Execute shell commands and wait for them to finish. Default timeout is 30 s. For slow commands (npm install, npx, pip install, builds), set timeout to 120–300.
+- **`ShellStart`**: Run a long command in the **background** and return immediately — training runs, builds, servers, watchers. Declare what should interrupt you in `wake_on` (`exit`, `match` patterns, `silence`, `every_n_matches`) and then continue with other work: you are messaged automatically when one of those fires. **Do not poll a background job** — checking it on a loop is the exact waste this tool exists to remove. `ShellList` shows what is running, `ShellLog` reads output when you have a reason to, `ShellSend` writes to stdin, `ShellStop` kills it.
 - **`ls`**: List a directory
 - **`glob`**: Find files by pattern (e.g. `**/*.py`)
 - **`grep`**: Search file contents with regex

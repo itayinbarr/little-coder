@@ -24,6 +24,30 @@
 // requires one, so `_shared` is skipped and stays a plain library.
 
 /** An operator/keyword through which a command writes to a path. */
+/**
+ * Every tool that hands a string to a shell, and can therefore reach the
+ * filesystem without going near the `write` tool.
+ *
+ * This list is shared by permission-gate and write-guard deliberately. Issue
+ * #70 happened because each guard matched its own hardcoded set: the gate knew
+ * about `bash` but not `ShellSession`, so a model refused a whole-file write
+ * simply re-ran it through the other tool and landed in an unguarded execSync.
+ * Two copies of a security-relevant list will drift again, and the drift is
+ * invisible until someone exploits it — so there is one copy, here, and adding
+ * a new shell tool means adding it once.
+ *
+ * `ShellSessionCwd` / `ShellSessionReset` take no command (fixed `pwd`, or a
+ * no-op) and stay ungated. `ShellSend` writes to an already-running job's
+ * stdin rather than starting a command, so it is gated by whatever approved
+ * that job in the first place.
+ */
+export const SHELL_TOOLS: ReadonlySet<string> = new Set([
+  "bash",
+  "Bash",
+  "ShellSession",
+  "ShellStart",
+]);
+
 export type WriteKind = "redirect" | "append" | "tee" | "dd";
 
 export interface ShellWrite {

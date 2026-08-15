@@ -8,6 +8,7 @@ import {
 } from "../subagent/spawn.ts";
 import { SubCoderTracker } from "../subagent/tracker.ts";
 import { currentModelId } from "../subagent/index.ts";
+import { enterPhase } from "../phase-model/index.ts";
 import { PlanStatus } from "./status.ts";
 import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
 import { injectionResult } from "../_shared/inject.ts";
@@ -204,6 +205,18 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
   const t0 = Date.now();
   const tracker = new SubCoderTracker(ctx, { key: "plan-explorers", totalSince: t0 });
   const status = new PlanStatus(ctx);
+  // Per-phase model selection (issue #61). Switch the SESSION to the plan model
+  // first, so the synthesis turn below — which runs on the main agent, not on a
+  // sub-coder — is written by the planner too.
+  //
+  // Then read the model back rather than reusing the tag: enterPhase is a no-op
+  // under manual handover and degrades to "stay put" when the model is
+  // unavailable or has no key. Explorer sub-coders must follow what is actually
+  // active, or a refused switch would send every child at a model this box
+  // cannot serve — and on a single local backend, a child on a different model
+  // forces a weight reload the user did not ask for.
+  const switched = await enterPhase(pi, ctx, "plan");
+  if (switched) ctx.ui?.notify?.(switched, "info");
   const model = currentModelId(ctx);
 
   // ESC (or Ctrl+C) cancels the plan: there's no agent turn running during the
@@ -373,6 +386,14 @@ export default function (pi: ExtensionAPI) {
       choice = undefined;
     }
     if (choice === "Approve & implement") {
+      // The handover (issue #61): approving is the moment planning ends, so the
+      // action model takes over here. Awaited before the message is queued so
+      // the implementation turn actually runs on the new model rather than
+      // racing the switch. A no-op under manual handover, or when plan and
+      // action resolve to the same model — which is what keeps a single-backend
+      // local setup from reloading identical weights on every approval.
+      const switched = await enterPhase(pi, ctx, "action");
+      if (switched) (ctx as any).ui?.notify?.(switched, "info");
       // deliverAs: pi is still settling the just-ended synthesis turn (this
       // agent_end handler is itself part of that processing), so an immediate
       // send is rejected as "already processing" — queue it as a follow-up.

@@ -40,8 +40,14 @@ const INTENT_MAP: Record<string, string[]> = {
   edit: ["edit"], change: ["edit"], modify: ["edit"],
   fix: ["edit"], update: ["edit"], replace: ["edit"],
   add: ["edit", "write"], refactor: ["edit", "read"],
-  run: ["bash"], execute: ["bash"], install: ["bash"],
-  build: ["bash"], test: ["bash"],
+  run: ["bash"], execute: ["bash"],
+  // Long-running intents point at ShellStart first: these are exactly the
+  // commands that would otherwise block a whole turn on `bash`.
+  install: ["ShellStart", "bash"], build: ["ShellStart", "bash"],
+  test: ["bash"],
+  train: ["ShellStart"], training: ["ShellStart"], finetune: ["ShellStart"],
+  background: ["ShellStart"], watch: ["ShellStart"], serve: ["ShellStart"],
+  server: ["ShellStart"], monitor: ["ShellStart"], daemon: ["ShellStart"],
   find: ["glob", "grep"], search: ["grep"],
   grep: ["grep"], glob: ["glob"],
   fetch: ["webfetch"], download: ["webfetch"], url: ["webfetch"],

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  SHELL_TOOLS,
   detectWriteTargets,
   hasWriteRedirection,
   splitCommandChain,
@@ -165,5 +166,24 @@ describe("stripHeredocBodies", () => {
   it("handles more than one heredoc", () => {
     const cmd = "cat > a << 'E1'\nx\nE1\ncat > b << 'E2'\ny\nE2";
     expect(splitCommandChain(cmd)).toEqual(["cat > a", "cat > b"]);
+  });
+});
+
+describe("SHELL_TOOLS", () => {
+  // Issue #70 happened because permission-gate and write-guard each kept their
+  // own copy of this list and one of them was missing ShellSession. The list
+  // lives here now precisely so a new shell tool cannot be gated by one guard
+  // and not the other — this test fails if a future tool is added to only one.
+  it("covers every tool that hands a string to a shell", () => {
+    for (const t of ["bash", "Bash", "ShellSession", "ShellStart"]) {
+      expect(SHELL_TOOLS.has(t), t).toBe(true);
+    }
+  });
+
+  it("excludes the shell tools that take no command", () => {
+    // These run a fixed `pwd` / are a no-op / write to an already-approved job.
+    for (const t of ["ShellSessionCwd", "ShellSessionReset", "ShellSend", "read", "edit"]) {
+      expect(SHELL_TOOLS.has(t), t).toBe(false);
+    }
   });
 });

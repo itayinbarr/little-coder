@@ -60,10 +60,10 @@ describe("skills directory loads from repo", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const toolsDir = join(here, "..", "..", "..", "skills", "tools");
 
-  it("exists and has 14 markdown files", () => {
+  it("exists and has 15 markdown files", () => {
     expect(existsSync(toolsDir)).toBe(true);
     const files = readdirSync(toolsDir).filter((f) => f.endsWith(".md"));
-    expect(files.length).toBe(14);
+    expect(files.length).toBe(15);
   });
 
   it("every tool skill has target_tool in frontmatter", () => {

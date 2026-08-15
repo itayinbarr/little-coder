@@ -66,11 +66,23 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "ShellSession",
     label: "ShellSession",
-    description:
-      "Run a command in a persistent bash session. cd, env vars, and shell state " +
-      "persist across calls. One command per turn. Default timeout 30s (increase to " +
-      "120-300 for installs/builds). Output is line-capped with head/tail truncation " +
-      "and a trailing [exit=N cwd=… timed_out=…] footer.",
+    // The description is computed, because the two backends genuinely differ
+    // and one sentence cannot honestly cover both. Under Terminal-Bench a real
+    // tmux session is driven, so state does persist. Locally the backend is
+    // execSync — one process per call, no shared cwd, no shared env — and the
+    // tool spent every release until v1.16.0 telling local users the opposite,
+    // so a `cd` "worked" and then silently did not apply to the next call.
+    description: inTbMode()
+      ? "Run a command in a persistent bash session. cd, env vars, and shell state " +
+        "persist across calls. One command per turn. Default timeout 30s (increase to " +
+        "120-300 for installs/builds). Output is line-capped with head/tail truncation " +
+        "and a trailing [exit=N cwd=… timed_out=…] footer."
+      : "Run a shell command. NOTE: each call runs in its own process — cd, env vars, " +
+        "and shell state do NOT persist between calls, so use absolute paths and set " +
+        "variables inline. Blocks until the command exits: for anything long-running " +
+        "(training, builds, servers) use ShellStart instead. Default timeout 30s " +
+        "(increase to 120-300 for installs/builds). Output is line-capped with " +
+        "head/tail truncation and a trailing [exit=N cwd=… timed_out=…] footer.",
     parameters: Type.Object({
       command: Type.String({ description: "Shell command to run" }),
       timeout: Type.Optional(Type.Integer({ description: "Seconds (default 30, max 600)" })),
@@ -117,7 +129,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "ShellSessionReset",
     label: "ShellSessionReset",
-    description: "Kill and restart the bash session. Use only if it becomes unresponsive.",
+    description: inTbMode()
+      ? "Kill and restart the bash session. Use only if it becomes unresponsive."
+      : "No-op locally: the subprocess backend keeps no state to reset.",
     parameters: Type.Object({}),
     async execute(_id, _params, _signal, _onUpdate, ctx) {
       const sessionId = process.env.LITTLE_CODER_SESSION_ID || "default";

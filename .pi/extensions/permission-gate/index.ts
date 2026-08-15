@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { detectWriteTargets, splitCommandChain } from "../_shared/shell-write.ts";
+import { SHELL_TOOLS, detectWriteTargets, splitCommandChain } from "../_shared/shell-write.ts";
 
 // Port of tools.py::_SAFE_PREFIXES + agent.py::_check_permission. Shell
 // commands not matching the whitelist are blocked in "auto" mode. In
@@ -71,9 +71,8 @@ export function isSafeBash(command: string, prefixes: readonly string[] = getSaf
   return segments.every((segment) => prefixes.some((p) => segment.startsWith(p)));
 }
 
-// Tools that hand a string to a shell. `ShellSessionCwd` / `ShellSessionReset`
-// take no command (they run a fixed `pwd` / are a no-op) and stay ungated.
-const SHELL_TOOLS = new Set(["bash", "Bash", "ShellSession"]);
+// Which tools count as "hands a string to a shell" lives in _shared, so this
+// gate and write-guard can never disagree about it again (issue #70).
 
 function getPermissionMode(): "auto" | "accept-all" | "manual" {
   const v = process.env.LITTLE_CODER_PERMISSION_MODE;
@@ -111,9 +110,28 @@ export default function (pi: ExtensionAPI) {
         }
         const offender =
           splitCommandChain(cmd).find((s) => !isSafeBash(s)) ?? cmd;
+        const binary = offender.split(/\s+/)[0];
+        // Say what to do next, not just what was refused.
+        //
+        // The bare "not in SAFE_PREFIXES" line sent models hunting: observed
+        // live, a refusal on `./build.sh` was followed by `bash ./build.sh`,
+        // then `sh ./build.sh`, then a successful `python3 -c
+        // "subprocess.run(...)"` — three wasted turns and the guard defeated
+        // anyway, because interpreters are themselves whitelisted (issue #94).
+        // A refusal that names the actual remedy is the only thing that stops
+        // the search, and it is far closer to the decision than a line in
+        // AGENTS.md thousands of tokens earlier.
         return {
           block: true,
-          reason: `shell whitelist: "${offender.split(/\s+/)[0]}" is not in SAFE_PREFIXES`,
+          reason:
+            `shell whitelist: "${binary}" is not in SAFE_PREFIXES, so this command was refused.\n` +
+            `Do NOT try to reach the same effect another way — re-running it through ` +
+            `python3 -c, node -e, env, sh, or an -exec flag defeats a limit the user set on ` +
+            `purpose, and wastes your budget.\n` +
+            `If a file needs changing, use edit/write, which do not need a shell. ` +
+            `Otherwise tell the user this command was refused and that they can allow it with ` +
+            `LITTLE_CODER_BASH_ALLOW="${binary}" (or set LITTLE_CODER_PERMISSION_MODE=accept-all), ` +
+            `then continue with the rest of the task.`,
         };
       }
     }

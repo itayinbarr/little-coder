@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { harnessIntervention } from "../_shared/intervention.ts";
-import { detectWriteTargets } from "../_shared/shell-write.ts";
+import { SHELL_TOOLS, detectWriteTargets } from "../_shared/shell-write.ts";
 
 // Windows reserved device names. Writing to a file whose basename is one of
 // these (with or without an extension, any case) targets a DOS device rather
@@ -71,9 +71,10 @@ function pathKey(input: Record<string, unknown>): "path" | "file_path" | undefin
   return undefined;
 }
 
-// Tools that hand a string to a shell, and so can reach the filesystem without
-// going anywhere near the `write` tool (issue #70).
-const SHELL_TOOLS = new Set(["bash", "Bash", "ShellSession"]);
+// Which tools hand a string to a shell (and so can reach the filesystem without
+// going anywhere near the `write` tool) lives in _shared/shell-write.ts — one
+// list, shared with permission-gate, so the two can never drift apart the way
+// they had in issue #70.
 
 function editRecipe(resolved: string): string {
   return (

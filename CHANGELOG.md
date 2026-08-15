@@ -2,6 +2,29 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.16.0] — 2026-08-16
+
+### Added
+- **Background shells that wake you on job events, not on a timer** (new). `bash` blocks the turn until a command exits, so a long job either freezes the session or gets polled — and polling a six-hour fine-tune every five minutes is 71 wasted turns on a machine where each one costs real seconds. **`ShellStart`** runs a command in the background and returns immediately; you declare what is worth interrupting you for and the harness stays silent until it happens:
+
+  ```
+  {"name": "ShellStart", "input": {"command": "python train.py", "label": "finetune",
+   "wake_on": {"match": ["Traceback", "CUDA out of memory", "val_loss="],
+               "every_n_matches": 10, "silence": "15m"}}}
+  ```
+
+  Wake rules are `exit` (default on), `match` (regex, falling back to literal text), `silence` (stalled after producing output), and `every_n_matches` (throttle a chatty pattern). Urgency picks the delivery lane: a crash or an error-ish match interrupts the current turn, a clean exit or a milestone waits for the tool calls in flight, routine output rides along with the next turn. Wake payloads are bounded — an excerpt plus the exit code, never the whole log — with **`ShellLog`** to page deeper on demand. Also **`ShellList`**, **`ShellSend`** (stdin, for a REPL or a prompting installer), and **`ShellStop`**. A footer line shows what is running.
+
+  Jobs may outlive a turn, never the session: `session_shutdown` and every catchable signal reap them, and because SIGKILL is catchable by nobody, each job additionally carries a watchdog that kills its own process group when little-coder's pid disappears. Jobs run in their own process group and are signalled as a group, so `python train.py` under a shell dies with it rather than being orphaned holding the GPU.
+- **Per-phase model selection** ([#61](https://github.com/itayinbarr/little-coder/issues/61) by [@cndjonno](https://github.com/cndjonno), with [@cal101](https://github.com/cal101)). Plan on a big model, implement on a small one. `/plan-model` and `/action-model` tag them (with autocomplete and fuzzy matching, so `/action-model 9b` resolves), `/phase-models` shows the state, and `models.json` supplies defaults via `planModel` / `actionModel`. The tags are live session state rather than launch config, because the use case that motivated this is swapping planners mid-session to A/B them. Entering Plan Mode switches to the plan model; approving a plan hands over to the action model. `/model-handover manual` turns the automatic switching off — worth knowing that on a single local backend a handover evicts and reloads weights, so "never switch for me" is a performance choice as much as a taste one. Untagged phases use the active model, so an unconfigured session behaves exactly as before.
+
+### Fixed
+- **A refused shell command now says what to do instead of just what was refused** ([#94](https://github.com/itayinbarr/little-coder/issues/94)). Observed live: a refusal on `./build.sh` was followed by `bash ./build.sh`, then `sh ./build.sh`, then a successful `python3 -c "subprocess.run(...)"` — three wasted turns and the guard defeated anyway, since interpreters are themselves whitelisted. The refusal now names the evasions not to attempt, points at `edit`/`write` for anything that does not need a shell, and gives the user the actual remedy (`LITTLE_CODER_BASH_ALLOW="<cmd>"`). Same scenario after the change: refused once, the rest of the task completed, the remedy reported, no bypass attempted. This is the token-burn half of #94; the whitelist's porousness is unchanged and still open there.
+- **`ShellSession` no longer claims a persistence it does not have.** It advertised "cd, env vars, and shell state persist across calls", which is true only under Terminal-Bench's tmux backend. Locally the backend is `execSync` — one process per call — so a `cd` appeared to work and silently did not apply to the next call. The description is now computed per backend, and points at `ShellStart` for anything long-running.
+- **The list of shell-executing tools is shared by both guards** (no issue; found while adding `ShellStart`). `permission-gate` and `write-guard` each kept their own copy, which is exactly how [#70](https://github.com/itayinbarr/little-coder/issues/70) happened — the gate knew about `bash` but not `ShellSession`, so a refused write simply went through the other tool. One list now, in `_shared/shell-write.ts`, with a test that fails if a shell tool is gated by one guard and not the other.
+
+---
+
 ## [v1.15.0] — 2026-08-15
 
 ### Fixed
