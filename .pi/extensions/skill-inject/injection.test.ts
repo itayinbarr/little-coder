@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import setupSkillInject from "./index.ts";
 import setupKnowledgeInject from "../knowledge-inject/index.ts";
 
@@ -18,6 +18,13 @@ function handlerFor(setup: (pi: any) => void): Handler {
   });
   if (!handler) throw new Error("extension registered no before_agent_start handler");
   return handler;
+}
+
+/** Every handler an extension registers, so a test can drive tool_result too. */
+function handlersFor(setup: (pi: any) => void): Record<string, Handler> {
+  const handlers: Record<string, Handler> = {};
+  setup({ on: (name: string, h: Handler) => { handlers[name] = h; } });
+  return handlers;
 }
 
 const ctx = { ui: { notify: () => {} } };
@@ -60,6 +67,40 @@ describe("skill-inject still injects after the #73 conversion", () => {
 
     expect(result?.message.content).toContain('"name": "bash"');
     expect(result.message.content).not.toContain('"name": "Bash"');
+  });
+
+  // The half of the pi 0.83 rename nobody reported. The registry is keyed by
+  // each card's target_tool, but recency and error-recovery look it up with the
+  // name pi reports on tool events. Once pi went lowercase those lookups missed
+  // every time, so priorities 1 and 2 of the selection algorithm contributed
+  // nothing from v1.14.0 on and only intent prediction still fired. The prompts
+  // below deliberately carry no INTENT_MAP keyword, so a card can only be
+  // selected via the priority under test.
+  // recentToolCalls / lastFailedTool are module-level, so each of these drives a
+  // freshly imported copy of the extension rather than leaking recency state
+  // into its neighbours.
+  async function freshHandlers(): Promise<Record<string, Handler>> {
+    vi.resetModules();
+    const mod = await import("./index.ts");
+    return handlersFor(mod.default);
+  }
+
+  it("selects a card by recency from pi's lowercase tool_result name", async () => {
+    const h = await freshHandlers();
+    await h.tool_result({ toolName: "bash", isError: false }, ctx);
+
+    const result = await h.before_agent_start(turn("ok, on to the next thing"), ctx);
+
+    expect(result?.message?.content ?? "").toContain("### bash");
+  });
+
+  it("selects a card by error recovery from pi's lowercase tool_result name", async () => {
+    const h = await freshHandlers();
+    await h.tool_result({ toolName: "edit", isError: true }, ctx);
+
+    const result = await h.before_agent_start(turn("ok, carry on"), ctx);
+
+    expect(result?.message?.content ?? "").toContain("### edit");
   });
 
   // Issue #97 / the pi 0.83 rename. The evidence step of the research directive
