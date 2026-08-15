@@ -2,6 +2,14 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.17.0] — 2026-08-16
+
+### Added
+- **Qwen3.8-27B (dense + MTP) in the shipped registry.** Its NextN head is in the GGUF (`qwen35.nextn_predict_layers=1`, `blk.64`), so MTP speculative decoding works — measured draft acceptance ~0.87. Measured on an RTX 5070 Laptop (8GB) with `UD-Q4_K_XL`: **6.42 tok/s at 32k context, `-ngl 18`, 7042MB**; 6.72 tok/s at 16k with `-ngl 20`. Being dense, it has no experts to park in RAM, so there is no `--n-cpu-moe` trick and it runs about 7× slower than `Qwen3.6-35B-A3B` on the same card — the quality option, not the fast one. One trap worth knowing: at 32k, `-ngl 20` passes `/health` and then generates zero tokens. It fits in VRAM with nothing left to compute, so a server that started is not a config that works. Launch script: `run/qwen38-dense.sh`.
+- **README sections for background jobs and per-phase model selection**, both shipped in v1.16.0 without docs.
+
+---
+
 ## [v1.16.0] — 2026-08-16
 
 ### Added

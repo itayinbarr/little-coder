@@ -74,6 +74,8 @@ The agent uses the directory you launched it from as its working directory — `
 - **Keyboard shortcuts** — press **ctrl+h** for a panel of the keys worth knowing; `/hotkeys` is the full reference. **ctrl+o** expands tool output ("more"), **ctrl+t** toggles thinking blocks, **ctrl+p** cycles models.
 - **Prompt history** — from an empty input, **↑** recalls your recent prompts (most-recent first), **↓** walks forward. History persists across sessions, so a fresh session can recall prompts from earlier runs.
 - **Sub-coders (`dispatch`)** — little-coder can spawn isolated child sessions to research a question (read the repo + browse online, read-only) and report back concisely, without cluttering the main conversation. A live panel above the input tracks them. Sub-coders run serially by default (two of them contend for the same local model server and finish slower than one); opt into parallelism with `LITTLE_CODER_SUBCODER_CONCURRENCY=2` or more.
+- **Background jobs (`ShellStart`)** — long commands (training, builds, servers, watchers) run in the background instead of blocking a turn, and little-coder wakes the model on *events in the job* rather than on a timer. A footer line shows what's running. See [Background jobs](#background-jobs) below.
+- **Per-phase models** — plan on a big model, implement on a small one, with `/plan-model` and `/action-model`. See [Per-phase model selection](#per-phase-model-selection) below.
 - **Sessions** — each session is auto-named from your first prompt (rename with `/name`) and shown in the terminal tab title. Use `/resume` to list and reopen past sessions for the current directory.
 - **Read-before-edit** — editing a file requires reading it first, so edits match the file's exact current text.
 - **Your own extensions** — drop them in `~/.config/little-coder/extensions/` and they load on the next launch. Run **`/extensions`** to see what's loaded and where it came from. See [Extending little-coder](docs/extensions.md).
@@ -202,6 +204,18 @@ Merge semantics: each top-level provider key in your override file **fully repla
 
 **Default model.** A top-level `"default": "provider/id"` key names the model bare `little-coder` launches when you don't pass `--model` and pi has no saved selection yet (shipped default: `llamacpp/qwen3.6-35b-a3b`). Your override file's `default` wins over the shipped one, so `{"default": "llamacpp/qwen3.6-27b"}` in `~/.config/little-coder/models.json` makes the dense 27B your first-run default. It's first-run-only: once you switch models in-session, pi remembers that and the default stops applying.
 
+**Per-phase models.** `/plan-model` and `/action-model` let planning and implementation run on different models — see [Per-phase model selection](#per-phase-model-selection) below.
+
+**Qwen3.8-27B (dense + MTP).** Added to the shipped registry in v1.17.0. It's the *quality* option on a small card, not the fast one — measured on an RTX 5070 Laptop (8GB) with `UD-Q4_K_XL`:
+
+| context | `-ngl` | tok/s | VRAM |
+|---|---|---|---|
+| 16k | 20 | 6.72 | 7200 MB |
+| 32k | 18 | **6.42** | 7042 MB |
+| 32k | 20 | — | loads, then generates nothing |
+
+Compare ~44 tok/s for `Qwen3.6-35B-A3B` (MoE) on the same box: the MoE is roughly 7× faster because its experts live in RAM (`--n-cpu-moe`), a trick a dense model has no equivalent for. Its NextN head is in the GGUF (`qwen35.nextn_predict_layers=1`, `blk.64`), so MTP speculative decoding works — measured draft acceptance ~0.87. The one caution worth repeating: at 32k, `-ngl 20` passes `/health` and then produces zero tokens. It fits in VRAM but has no room left to compute, so "the server started" is not evidence the config works. Raise the context and you must lower `-ngl`.
+
 **Community-recommended models.** The shipped `models.json` stays intentionally small and stable — it doesn't track the fast-moving world of community fine-tunes (which get re-uploaded and disappear from Hugging Face constantly). If you want to try one that's doing well in the community — e.g. `Qwen3.6-35B-A3B-REAM-192`, which topped both a community tournament and a little-coder pilot ([#63](https://github.com/itayinbarr/little-coder/issues/63)) — add it to your **own** override file rather than waiting for it to ship. Load the GGUF on your llama.cpp server, then drop an entry in `~/.config/little-coder/models.json`:
 
 ```json
@@ -282,6 +296,47 @@ Set `id` to whatever model your server reports, and `baseUrl` to its `/v1` endpo
 `.pi/settings.json` is a separate concern: it controls per-model **profiles** (context_limit, thinking_budget, temperature, benchmark_overrides) referenced by the `<provider>/<id>` key. Profiles don't register or describe models — they only tune how little-coder runs against models that are already registered.
 
 ---
+
+## Background jobs
+
+`bash` blocks the turn until the command exits, which makes it the wrong tool for anything long. The usual workaround is worse: background the job and then *poll* it, spending a turn, a slice of a small context window, and seconds of local inference to learn that training is still on epoch 3. A six-hour job checked every five minutes is 71 wasted turns.
+
+So `ShellStart` inverts it. The model says up front what is worth being interrupted for, and the harness stays quiet until one of those things happens:
+
+```json
+{"name": "ShellStart", "input": {
+  "command": "python train.py --epochs 50", "label": "finetune",
+  "wake_on": {"match": ["Traceback", "CUDA out of memory", "val_loss="],
+              "every_n_matches": 10, "silence": "15m"}}}
+```
+
+| `wake_on` | fires when |
+|---|---|
+| `exit` | the job exits (default on) |
+| `match` | a line matches — regex, falling back to literal text |
+| `silence` | it produced output, then went quiet this long (e.g. `"10m"`) |
+| `every_n_matches` | only every Nth match, to throttle a chatty pattern |
+
+Urgency decides how the news arrives: a crash or an error-ish match interrupts the current turn; a clean exit or a milestone waits for the tool calls already in flight; routine output rides along with the next turn. Six hours of progress bars cost nothing; a traceback at minute 40 costs one turn, immediately. What the model receives is a bounded excerpt plus the exit code — never the whole log — with `ShellLog` to page deeper on demand. `ShellList`, `ShellSend` (stdin, for a REPL or a prompting installer) and `ShellStop` round it out.
+
+**Lifetime.** A job outlives a turn but never the session. Jobs run in their own process group and are signalled as a group, so `python train.py` under a shell dies with the shell rather than being orphaned holding your VRAM. Session shutdown and every catchable signal reap them — and because SIGKILL is catchable by nobody, each job also carries a watchdog that kills its own group the moment little-coder's pid disappears.
+
+**Permissions.** `ShellStart` goes through the same whitelist as `bash`, so build and test commands usually need `LITTLE_CODER_BASH_ALLOW` (see [Permissions](#permissions)).
+
+## Per-phase model selection
+
+Plan on a big model, implement on a small one, without retyping ctrl+P at every transition ([#61](https://github.com/itayinbarr/little-coder/issues/61)).
+
+| command | does |
+|---|---|
+| `/plan-model <name>` | model for Plan Mode (autocompletes; `/plan-model 35b` resolves) |
+| `/action-model <name>` | model for implementation |
+| `/phase-models` | show both, plus the active model and handover mode |
+| `/model-handover auto\|manual` | whether little-coder switches models for you |
+
+Defaults come from `models.json` (`"planModel"` / `"actionModel"` / `"handover"`) or the environment (`LITTLE_CODER_PLAN_MODEL`, `LITTLE_CODER_ACTION_MODEL`, `LITTLE_CODER_MODEL_HANDOVER`), but the tags are **session state** — settable mid-session, because the case that motivated this is A/B-ing two planners against the same brief.
+
+With `auto` (default), entering Plan Mode switches to the plan model and approving a plan hands over to the action model. With `manual`, the tags are shown but nothing switches on your behalf. That toggle matters more locally than it would on a hosted provider: **on a single llama.cpp backend a handover evicts and reloads weights**, so an automatic switch can mean a 15-second stall mid-thought. A handover where both phases resolve to the same model is a no-op rather than a reload, and a switch that fails (model unavailable, no key) degrades to staying put and says so. Leave both unset and nothing changes — each phase uses the active model.
 
 ## Permissions
 

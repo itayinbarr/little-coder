@@ -7,6 +7,15 @@
       "apiKey": "LLAMACPP_API_KEY",
       "models": [
         {
+          "id": "qwen3.8-27b",
+          "name": "Qwen3.8-27B (dense + MTP, local llama.cpp)",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 32768,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
           "id": "qwen3.6-27b",
           "name": "Qwen3.6-27B (dense, local llama.cpp)",
           "reasoning": true,
