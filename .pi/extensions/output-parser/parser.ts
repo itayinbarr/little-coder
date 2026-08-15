@@ -33,6 +33,33 @@ export function escapeNewlinesInJsonStrings(text: string): string {
   return out.join("");
 }
 
+/** The first brace-balanced `{…}` substring of `s`, tracking nesting depth and
+ *  string quoting/escapes, or null if none closes. Unlike a `/\{[^{}]*\}/`
+ *  regex it returns the OUTER object even when it nests further objects — so a
+ *  valid tool call like `{"name":"Write","input":{…}}` isn't lost to its inner
+ *  `input` fragment when trailing text follows it — and a `}` inside a string
+ *  value doesn't prematurely close the match. */
+export function firstBalancedObject(s: string): string | null {
+  const start = s.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let quote: string | null = null;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (quote) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') quote = c;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return s.slice(start, i + 1);
+  }
+  return null;
+}
+
 export function repairJson(raw: string): Record<string, unknown> {
   const trimmed = raw.trim();
   if (!trimmed) return {};
@@ -61,11 +88,12 @@ export function repairJson(raw: string): Record<string, unknown> {
   try {
     return JSON.parse(fixed);
   } catch {}
-  // 6. extract first JSON object
-  const m = fixed.match(/\{[^{}]*\}/);
-  if (m) {
+  // 6. extract the first brace-balanced object (nesting- and quote-aware, so a
+  //    valid call isn't lost to an inner fragment when trailing text follows).
+  const obj = firstBalancedObject(fixed);
+  if (obj) {
     try {
-      return JSON.parse(m[0]);
+      return JSON.parse(obj);
     } catch {}
   }
   return { _raw: raw };

@@ -17,10 +17,32 @@
 // dispatch) entirely through environment variables the existing gates already
 // honor — see buildChildEnv().
 
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * Escalate to SIGKILL `delayMs` after a SIGTERM, unless the child has already
+ * exited. The gate is the caller's `hasExited()` — deliberately NOT
+ * `proc.killed`, which Node sets true on signal *dispatch* (not on actual
+ * termination), which made the previous `if (!proc.killed)` escalation
+ * unreachable and let a SIGTERM-ignoring child leak as an orphan. Returns the
+ * timer so callers may clear it. Never throws (the process may already be gone).
+ */
+export function scheduleForceKill(
+  proc: Pick<ChildProcess, "kill">,
+  hasExited: () => boolean,
+  delayMs = 4000,
+): ReturnType<typeof setTimeout> {
+  return setTimeout(() => {
+    try {
+      if (!hasExited()) proc.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
+  }, delayMs);
+}
 
 // Tools a sub-coder may use: read + search + browse online + read-only bash.
 // Enforced by the tool-gating extension in the child. Deliberately omits
@@ -330,6 +352,12 @@ async function runSubCoderOnce(opts: RunSubCoderOptions): Promise<SubCoderResult
     proc.stderr.on("data", (d) => {
       result.stderr += d.toString();
     });
+    // Tracks whether the child has actually exited. proc.killed is NOT this: Node
+    // sets proc.killed true the instant a signal is *dispatched*, not when the
+    // process dies, so gating the SIGKILL escalation on !proc.killed made it
+    // unreachable — a child that ignores SIGTERM was never force-killed and
+    // leaked as an orphan. The close/error handlers below flip this true.
+    let exited = false;
     // SIGTERM then SIGKILL — shared by the abort-signal and the watchdog timeout.
     const kill = () => {
       try {
@@ -337,13 +365,7 @@ async function runSubCoderOnce(opts: RunSubCoderOptions): Promise<SubCoderResult
       } catch {
         /* already gone */
       }
-      setTimeout(() => {
-        try {
-          if (!proc.killed) proc.kill("SIGKILL");
-        } catch {
-          /* ignore */
-        }
-      }, 4000);
+      scheduleForceKill(proc, () => exited);
     };
 
     // Watchdog: a child that hangs (e.g. a browser stuck on a page) must not
@@ -358,11 +380,13 @@ async function runSubCoderOnce(opts: RunSubCoderOptions): Promise<SubCoderResult
     }
 
     proc.on("close", (code) => {
+      exited = true;
       if (watchdog) clearTimeout(watchdog);
       if (buffer.trim()) processLine(buffer);
       resolveP(code ?? 0);
     });
     proc.on("error", (e) => {
+      exited = true;
       if (watchdog) clearTimeout(watchdog);
       result.stderr += String(e?.message ?? e);
       resolveP(1);
@@ -410,8 +434,8 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 }
 
 /**
- * Run several sub-coders with a concurrency cap (default 2 — a single local
- * backend is easily starved). `onUpdate` receives a fresh snapshot of all
+ * Run several sub-coders with a concurrency cap (default 1 — serial; a single
+ * local backend is easily starved, see defaultConcurrency). `onUpdate` receives a fresh snapshot of all
  * results whenever any child changes, which drives the live tracker.
  */
 export async function runSubCodersConcurrent(

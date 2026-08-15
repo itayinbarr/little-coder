@@ -14,7 +14,7 @@ import { injectionResult, makeDedupe } from "../_shared/inject.ts";
 // Like skill-inject, the selected entries ride in as a tail message rather
 // than a system-prompt append (issue #73 — see _shared/inject.ts).
 
-interface KnowledgeEntry {
+export interface KnowledgeEntry {
   topic: string;
   body: string;
   tokenCost: number;
@@ -26,7 +26,7 @@ const entries = new Map<string, KnowledgeEntry>();
 const cache = new Map<string, string>();
 let loaded = false;
 
-const MIN_SCORE_THRESHOLD = 2.0;
+export const MIN_SCORE_THRESHOLD = 2.0;
 const PER_ENTRY_CAP = 150;
 
 function dirs(): string[] {
@@ -62,7 +62,7 @@ function loadEntries(): void {
 }
 
 // ── Scoring (word=1.0, bigram/phrase=2.0) ───────────────────────────────
-function scoreEntry(userText: string, e: KnowledgeEntry): number {
+export function scoreEntry(userText: string, e: KnowledgeEntry): number {
   if (e.keywords.length === 0) return 0;
   const textLower = userText.toLowerCase();
   const words = new Set(textLower.split(/\s+/).filter(Boolean));

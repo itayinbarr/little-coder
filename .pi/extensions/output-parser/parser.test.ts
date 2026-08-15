@@ -1,5 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { repairJson, parseTextToolCalls, parseLiquidToolCalls, escapeNewlinesInJsonStrings } from "./parser.ts";
+import { repairJson, parseTextToolCalls, parseLiquidToolCalls, escapeNewlinesInJsonStrings, firstBalancedObject } from "./parser.ts";
+
+describe("firstBalancedObject", () => {
+  it("returns the OUTER object even when it nests further objects", () => {
+    const s = '{"name":"Write","input":{"a":1}}';
+    expect(firstBalancedObject(s)).toBe(s);
+  });
+  it("ignores braces that live inside string values", () => {
+    expect(firstBalancedObject('{"a":"}"}')).toBe('{"a":"}"}');
+  });
+  it("stops at the first fully balanced object", () => {
+    expect(firstBalancedObject('{"a":1} {"b":2}')).toBe('{"a":1}');
+  });
+  it("returns null when nothing balances", () => {
+    expect(firstBalancedObject("{unterminated")).toBeNull();
+    expect(firstBalancedObject("no braces here")).toBeNull();
+  });
+});
+
+describe("repairJson recovers a nested call before trailing garbage (LOGIC-001)", () => {
+  it("keeps the outer call, not the inner input fragment, when text follows it", () => {
+    const out = repairJson('{"name":"Write","input":{"path":"/a"}}\nSorry, retry: {broken');
+    expect(out.name).toBe("Write");
+    expect(out.input).toEqual({ path: "/a" });
+  });
+  it("parses a whole tool call whose string value contains a brace", () => {
+    const out = repairJson('{"name":"Bash","input":{"command":"echo {"}} and then junk');
+    expect(out.name).toBe("Bash");
+    expect((out.input as Record<string, unknown>).command).toBe("echo {");
+  });
+});
 
 describe("repairJson", () => {
   it("direct parse on valid JSON", () => {

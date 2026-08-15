@@ -8,11 +8,31 @@ import {
   readCache,
   writeCache,
   compareSemver,
+  isSemver,
   shouldSkip,
   promptTimeoutMs,
 } from "./update-check.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+describe("isSemver", () => {
+  it("accepts well-formed X.Y.Z and prerelease versions", () => {
+    expect(isSemver("1.14.0")).toBe(true);
+    expect(isSemver("0.0.1")).toBe(true);
+    expect(isSemver("2.3.4-rc.1")).toBe(true);
+    expect(isSemver("2.3.4-rc-1")).toBe(true);
+  });
+  it("rejects non-semver and shell-metacharacter payloads", () => {
+    // Guards the Windows self-update sink `cmd.exe /c npm install little-coder@<v>`.
+    expect(isSemver("1.0")).toBe(false);
+    expect(isSemver("latest")).toBe(false);
+    expect(isSemver("1.0.0 & calc.exe")).toBe(false);
+    expect(isSemver("1.0.0; rm -rf /")).toBe(false);
+    expect(isSemver("1.0.0\ncalc")).toBe(false);
+    expect(isSemver(undefined)).toBe(false);
+    expect(isSemver(123)).toBe(false);
+  });
+});
 
 describe("compareSemver", () => {
   it("orders major / minor / patch correctly", () => {
@@ -33,6 +53,12 @@ describe("compareSemver", () => {
   it("tolerates short version strings", () => {
     expect(compareSemver("1.0", "1.0.0")).toBe(0);
     expect(compareSemver("1", "1.0.0")).toBe(0);
+  });
+
+  it("keeps the full prerelease tail past extra hyphens", () => {
+    // split('-', 2) truncated 'rc-2' → 'rc', making both sides compare equal.
+    expect(compareSemver("1.0.0-rc-2", "1.0.0-rc-1")).toBe(1);
+    expect(compareSemver("1.0.0-rc-1", "1.0.0-rc-2")).toBe(-1);
   });
 });
 
