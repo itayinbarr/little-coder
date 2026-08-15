@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSkillFile } from "../skill-inject/frontmatter.ts";
 import { injectionResult, makeDedupe } from "../_shared/inject.ts";
+import { allowedToolSet, toolsAvailable } from "../_shared/allowed-tools.ts";
 
 // ── Knowledge-entry registry ────────────────────────────────────────────
 // Port of local/knowledge_augment.py. Loads skills/knowledge/*.md plus the
@@ -107,8 +108,15 @@ export default function (pi: ExtensionAPI) {
     const prompt = event.prompt ?? "";
     if (!prompt) return;
 
+    // Never inject an entry that instructs tools this process cannot call.
+    // In a sub-coder the allow-list is SUBCODER_ALLOWED_TOOLS, which has no
+    // evidence tools — and the research protocol's step 4 ("call EvidenceList
+    // before answering") is then unsatisfiable by construction (issue #97).
+    const allowed = allowedToolSet(lc);
+
     const scored: Array<{ score: number; entry: KnowledgeEntry }> = [];
     for (const e of entries.values()) {
+      if (!toolsAvailable(e.requiresTools, allowed)) continue;
       const s = scoreEntry(prompt, e);
       if (s >= MIN_SCORE_THRESHOLD) scored.push({ score: s, entry: e });
     }

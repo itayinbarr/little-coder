@@ -2,6 +2,23 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.15.0] — 2026-08-15
+
+### Fixed
+- **Tool calls resolve again on pi 0.83** ([#92](https://github.com/itayinbarr/little-coder/pull/92) by [@rfairburn](https://github.com/rfairburn), confirmed by [@highlyunavailable](https://github.com/highlyunavailable)). pi 0.83 registers its built-ins lowercase (`read`, `write`, `edit`, `bash`, `grep`, `ls`), but the skill cards and `AGENTS.md` still taught `Read`/`Write`/`Bash`, so a request to run `ls` could fire `BrowserNavigate` instead. All tool names in `skills/tools/*.md`, `INTENT_MAP`, and the system prompt now match what pi actually registers.
+- **The skill selector's error-recovery and recency priorities work again** (found while fixing the above; no issue). `skill-inject` keyed its registry by `target_tool` (`Bash`) but looked it up with the names pi reports on tool events (`bash`), so two of the selection algorithm's three priorities silently matched nothing from v1.14.0 on. Lookup is case-insensitive now, so a future rename degrades instead of going dark.
+- **Sub-coders are no longer told to use tools they are forbidden to call** ([#97](https://github.com/itayinbarr/little-coder/issues/97) by [@heinrichI](https://github.com/heinrichI)). The evidence-first research protocol was injected into sub-coders, whose allow-list has no `Evidence*` tools — and its step 4 ("call `EvidenceList` before answering; if it is empty you are not ready") is then unsatisfiable by construction. Injected guidance is now filtered against the process's real allow-list; children cite inline in their report instead. The `lc.isSubtask` guard that was meant to prevent this had never been set by anything.
+- **A sub-coder that ignores SIGTERM is force-killed** ([#102](https://github.com/itayinbarr/little-coder/pull/102) by [@ltanon-ai](https://github.com/ltanon-ai)). The SIGKILL escalation was gated on `proc.killed`, which Node sets when a signal is *dispatched* rather than when the process exits, making the branch unreachable and leaking hung children as orphans.
+- **The pre-edit checkpoint backup actually runs** ([#102](https://github.com/itayinbarr/little-coder/pull/102)). It keyed on `input.file_path`, but pi's `write`/`edit` pass `path`, so `~/.little-coder/checkpoints/` had silently never been written for normal operation.
+- **A valid tool call followed by trailing text is no longer dropped** ([#102](https://github.com/itayinbarr/little-coder/pull/102)). The output parser's last-resort `/\{[^{}]*\}/` fallback grabbed the first brace-*free* object, returning a nested `input` fragment with no `name`. Replaced with a quote- and nesting-aware scanner.
+- **The update check validates the version it gets from the registry** ([#102](https://github.com/itayinbarr/little-coder/pull/102)). A non-semver `latest` reached `compareSemver` (NaN math) and, on Windows, `cmd.exe /c npm install little-coder@<latest>`. Also keeps the full prerelease tail (`1.0.0-rc-1`) instead of truncating at the first hyphen.
+- **`package-lock.json` pins its dependencies again** ([#103](https://github.com/itayinbarr/little-coder/pull/103) by [@Thib-ai](https://github.com/Thib-ai)). Three nested `@earendil-works` entries shipped without an `integrity` hash, so `npm install -g little-coder` fetched whatever the registry served rather than verifying the tarball, and the repo could not be packaged for NixOS. A CI job now runs `npm ci` on every PR so it cannot regress.
+
+### Changed
+- **`AGENTS.md` no longer promises "full system access"** ([#94](https://github.com/itayinbarr/little-coder/issues/94) by [@Franck-Nein](https://github.com/Franck-Nein), with [@mac-edmondson](https://github.com/mac-edmondson), [@colinmutter](https://github.com/colinmutter), [@steverhoades](https://github.com/steverhoades) and [@guppy42](https://github.com/guppy42)). colinmutter's diagnosis was right: the prompt told the model it had unrestricted access while the shell guard told it otherwise, and the model resolved the contradiction by hunting for a way around the guard — burning a lot of tokens doing it. The prompt now states that a refused command is an answer, names the specific evasions not to attempt, and points at `edit`/`write` for anything a shell isn't needed for. The autonomy framing is unchanged. This addresses the token burn, **not** the underlying porousness of the whitelist; see the issue for that.
+
+---
+
 ## [v1.14.0] — 2026-07-31
 
 ### Changed

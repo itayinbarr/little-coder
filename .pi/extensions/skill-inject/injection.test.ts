@@ -28,7 +28,11 @@ function turn(prompt: string, systemPrompt = "BASE SYSTEM PROMPT") {
     prompt,
     systemPrompt,
     systemPromptOptions: {
-      littleCoder: { skillTokenBudget: 300, knowledgeTokenBudget: 200, contextLimit: 32768 },
+      littleCoder: {
+        skillTokenBudget: 300,
+        knowledgeTokenBudget: 200,
+        contextLimit: 32768,
+      } as Record<string, unknown>,
     },
   };
 }
@@ -56,6 +60,32 @@ describe("skill-inject still injects after the #73 conversion", () => {
 
     expect(result?.message.content).toContain('"name": "bash"');
     expect(result.message.content).not.toContain('"name": "Bash"');
+  });
+
+  // Issue #97 / the pi 0.83 rename. The evidence step of the research directive
+  // must not be handed to a process that cannot call the evidence tools.
+  it("drops the EvidenceAdd step when evidence tools are gated out", async () => {
+    const { SUBCODER_ALLOWED_TOOLS } = await import("../subagent/spawn.ts");
+    const handler = handlerFor(setupSkillInject);
+    const event = turn("research the history of the transistor online");
+    event.systemPromptOptions.littleCoder.allowedTools =
+      SUBCODER_ALLOWED_TOOLS.split(",");
+
+    const result = await handler(event, ctx);
+
+    expect(result?.message.content).toContain("## Research-first directive");
+    expect(result.message.content).not.toContain("EvidenceAdd");
+    expect(result.message.content).toContain("name its source URL inline");
+  });
+
+  it("keeps the EvidenceAdd step when nothing is gated", async () => {
+    const handler = handlerFor(setupSkillInject);
+    const result = await handler(
+      turn("research the history of the transistor online, cite your sources"),
+      ctx,
+    );
+
+    expect(result?.message.content).toContain("EvidenceAdd");
   });
 
   it("still appends the research directive last, ahead of nothing", async () => {

@@ -5,6 +5,7 @@ triggers: ["/research"]
 when_to_use: when the task requires gathering facts from the web and citing them in a final answer
 context: inline
 token_cost: 180
+requires_tools: [BrowserNavigate, BrowserExtract, EvidenceAdd, EvidenceList]
 user_invocable: false
 ---
 ## Research Protocol (evidence-first)

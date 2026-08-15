@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSkillFile } from "./frontmatter.ts";
 import { injectionResult, makeDedupe } from "../_shared/inject.ts";
+import { allowedToolSet, toolsAvailable } from "../_shared/allowed-tools.ts";
 
 // ── Tool-skill registry ─────────────────────────────────────────────────
 // Port of local/skill_augment.py. Loads skills/tools/*.md once, hooks
@@ -100,11 +101,31 @@ function predictTools(userText: string): string[] {
   return predicted;
 }
 
+// Resolve a tool name to its skill card case-insensitively.
+//
+// The registry is keyed by each card's `target_tool`, but the recency and
+// error-recovery lookups feed it names straight off pi's tool events. When pi
+// 0.83 renamed its built-ins to lowercase, every one of those lookups started
+// missing silently and priorities 1 and 2 of the selection algorithm stopped
+// contributing anything — only intent prediction still fired, and nothing
+// failed loudly enough to notice. Matching case-insensitively means a future
+// rename degrades to "the card still loads" instead of "half the algorithm is
+// dead". `allowed` is checked against the tool's real registered name.
+function lookupSkill(name: string): ToolSkill | undefined {
+  const direct = skills.get(name);
+  if (direct) return direct;
+  const lower = name.toLowerCase();
+  for (const [key, sk] of skills) {
+    if (key.toLowerCase() === lower) return sk;
+  }
+  return undefined;
+}
+
 function selectSkills(prompt: string, budget: number, allowed?: Set<string>): ToolSkill[] {
   const selected: ToolSkill[] = [];
   let used = 0;
   const tryAdd = (name: string): void => {
-    const sk = skills.get(name);
+    const sk = lookupSkill(name);
     if (!sk || selected.includes(sk)) return;
     if (allowed && !allowed.has(name)) return;
     if (used + sk.tokenCost > budget) return;
@@ -132,9 +153,26 @@ function selectSkills(prompt: string, budget: number, allowed?: Set<string>): To
   return selected;
 }
 
-function buildBlock(selected: ToolSkill[]): string {
+// A card is selected for its own target_tool, but its prose may point at other
+// tools — browser_extract tells you to save the span you found via EvidenceAdd.
+// In a sub-coder that call is refused (issue #97), so drop any guidance line
+// naming a gated tool rather than instructing a dead end. Only whole lines are
+// dropped, which keeps the surrounding card intact.
+function stripGatedLines(body: string, allowed: Set<string> | undefined): string {
+  if (!allowed) return body;
+  const gated = EVIDENCE_TOOLS.filter((t) => !allowed.has(t));
+  if (gated.length === 0) return body;
+  return body
+    .split("\n")
+    .filter((line) => !gated.some((t) => line.includes(t)))
+    .join("\n");
+}
+
+function buildBlock(selected: ToolSkill[], allowed?: Set<string>): string {
   let out = "\n\n## Tool Usage Guidance\n";
-  for (const s of selected) out += `\n### ${s.targetTool}\n${s.body}\n`;
+  for (const s of selected) {
+    out += `\n### ${s.targetTool}\n${stripGatedLines(s.body, allowed)}\n`;
+  }
   return out;
 }
 
@@ -166,16 +204,37 @@ function looksLikeResearchTask(text: string): boolean {
   return false;
 }
 
-const RESEARCH_DIRECTIVE = [
-  "",
-  "## Research-first directive",
-  "This task involves online research. Before producing a final answer:",
-  "1. Use BrowserNavigate / BrowserExtract (or websearch for first hops) to gather facts.",
-  "2. Save each citable fact via EvidenceAdd before relying on it.",
-  "3. Only after evidence is in place should you consider any edit/write tool calls.",
-  "Skipping the gather step (going straight to edit/write or guessing from memory) is wrong — restart with the browse step instead.",
-  "",
-].join("\n");
+// Built per-turn rather than as a constant: the evidence step only makes sense
+// when the evidence tools are actually callable. In a sub-coder they are not
+// (SUBCODER_ALLOWED_TOOLS has no Evidence*), and instructing a child to "save
+// each citable fact via EvidenceAdd" when tool-gating will refuse the call is
+// how issue #97 presented. Children cite inline in their report instead.
+const EVIDENCE_TOOLS = ["EvidenceAdd", "EvidenceGet", "EvidenceList"];
+
+function researchDirective(allowed: Set<string> | undefined): string {
+  const canCite = toolsAvailable(["EvidenceAdd"], allowed);
+  const lines = [
+    "",
+    "## Research-first directive",
+    "This task involves online research. Before producing a final answer:",
+    "1. Use BrowserNavigate / BrowserExtract (or websearch for first hops) to gather facts.",
+  ];
+  if (canCite) {
+    lines.push("2. Save each citable fact via EvidenceAdd before relying on it.");
+    lines.push("3. Only after evidence is in place should you consider any edit/write tool calls.");
+    lines.push(
+      "Skipping the gather step (going straight to edit/write or guessing from memory) is wrong — restart with the browse step instead.",
+    );
+  } else {
+    lines.push("2. Quote the exact span you rely on and name its source URL inline in your report.");
+    lines.push("3. Only after the facts are gathered should you state a conclusion.");
+    lines.push(
+      "Skipping the gather step (guessing from memory) is wrong — restart with the browse step instead.",
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
 
 export default function (pi: ExtensionAPI) {
   const shouldInject = makeDedupe();
@@ -205,16 +264,11 @@ export default function (pi: ExtensionAPI) {
     if (budget <= 0) return;
 
     // Allow-list source: prefer systemPromptOptions (set by tool-gating's
-    // before_agent_start), but fall back to LITTLE_CODER_ALLOWED_TOOLS env
+    // before_agent_start), falling back to LITTLE_CODER_ALLOWED_TOOLS env
     // directly. Pi runs before_agent_start handlers in extension load order
     // (alphabetical), so skill-inject fires before tool-gating and
     // lc.allowedTools is undefined on the first turn unless we read env here.
-    let allowedList: string[] | undefined = lc.allowedTools;
-    if (!allowedList && process.env.LITTLE_CODER_ALLOWED_TOOLS) {
-      allowedList = process.env.LITTLE_CODER_ALLOWED_TOOLS
-        .split(",").map((s) => s.trim()).filter(Boolean);
-    }
-    const allowed = allowedList && allowedList.length > 0 ? new Set(allowedList) : undefined;
+    const allowed = allowedToolSet(lc);
 
     // Knowledge-inject may publish required_tools on systemPromptOptions —
     // pre-add those before selecting so they win even when budget is tight.
@@ -231,17 +285,20 @@ export default function (pi: ExtensionAPI) {
 
     const skillBlock = selected.length > 0
       ? (() => {
-          const key = selected.map((s) => s.targetTool).sort().join("|");
+          // The gated set is part of the key: the same card renders differently
+          // once a gated tool's guidance lines are stripped out.
+          const gateKey = allowed ? `#${EVIDENCE_TOOLS.filter((t) => !allowed.has(t)).join(",")}` : "";
+          const key = selected.map((s) => s.targetTool).sort().join("|") + gateKey;
           let b = selectionCache.get(key);
           if (b === undefined) {
-            b = buildBlock(selected);
+            b = buildBlock(selected, allowed);
             selectionCache.set(key, b);
           }
           return b;
         })()
       : "";
 
-    const directive = researchTask ? RESEARCH_DIRECTIVE : "";
+    const directive = researchTask ? researchDirective(allowed) : "";
 
     // Order within the block: [tool skill cards] [research directive]. The
     // directive comes LAST by design — small models show strong recency bias

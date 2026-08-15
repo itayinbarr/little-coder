@@ -5,6 +5,7 @@ triggers: ["/cite"]
 when_to_use: always, before producing a final answer on a research task
 context: inline
 token_cost: 120
+requires_tools: [EvidenceList]
 user_invocable: false
 ---
 ## Cite-before-answer checklist
