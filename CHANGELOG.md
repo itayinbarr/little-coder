@@ -2,6 +2,13 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [Unreleased]
+
+### Added
+- **OrcaRouter cloud gateway as a named provider.** The shipped `models.json` now pre-registers an `orcarouter` provider (`https://api.orcarouter.ai/v1`, `ORCAROUTER_API_KEY`) with the gateway's auto-routing/fast/free aliases plus a few vendor-qualified frontier models, and `ORCAROUTER_BASE_URL` overrides the endpoint. Pick it with `little-coder --model orcarouter/orcarouter/auto`.
+
+---
+
 ## [v1.17.0] — 2026-08-16
 
 ### Added

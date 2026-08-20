@@ -109,9 +109,22 @@ export OLLAMA_API_KEY=noop
 export LMSTUDIO_API_KEY=noop
 ```
 
-`LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, and `LMSTUDIO_BASE_URL` override the defaults (`http://127.0.0.1:8888/v1`, `http://127.0.0.1:11434/v1`, `http://127.0.0.1:1234/v1`).
+`LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, and `LMSTUDIO_BASE_URL` override the defaults (`http://127.0.0.1:8888/v1`, `http://127.0.0.1:11434/v1`, `http://127.0.0.1:1234/v1`). `ORCAROUTER_BASE_URL` overrides the default `https://api.orcarouter.ai/v1` for the cloud gateway.
 
 For cloud providers, set the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) and pi will discover it.
+
+### OrcaRouter (cloud gateway)
+
+[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible gateway that fronts both open-weight and frontier models (DeepSeek, Qwen, Gemini, …) behind a single endpoint. It also runs gateway-level, zero-trust security for AI agents on the same endpoint — screening every prompt/response and governing every tool call on a default-deny basis, with no application code changes.
+
+The `orcarouter` provider ships pre-registered in `models.json` (base URL `https://api.orcarouter.ai/v1`). Set the key and pick a model:
+
+```bash
+export ORCAROUTER_API_KEY=sk-orca-...
+little-coder --model orcarouter/orcarouter/auto
+```
+
+The shipped entries cover the gateway's auto-routing alias (`orcarouter/auto`), the fast/cheap `orcarouter/fusion`, the free tier (`orcarouter/free`), and a few vendor-qualified frontier models. Any model your gateway exposes can be added the same way — [see Configuring models](#configuring-models). `ORCAROUTER_BASE_URL` overrides the endpoint if you self-host a gateway.
 
 ## Local model setup (optional)
 

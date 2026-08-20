@@ -98,6 +98,11 @@ describe("applyEnvOverrides", () => {
     const out = applyEnvOverrides(providers, { LMSTUDIO_BASE_URL: "http://127.0.0.1:5678/v1" });
     expect(out.lmstudio.baseUrl).toBe("http://127.0.0.1:5678/v1");
   });
+  it("ORCAROUTER_BASE_URL overrides orcarouter baseUrl", () => {
+    const providers = { orcarouter: sampleProvider("https://api.orcarouter.ai/v1", "orcarouter/auto") };
+    const out = applyEnvOverrides(providers, { ORCAROUTER_BASE_URL: "https://gateway.example.com/v1" });
+    expect(out.orcarouter.baseUrl).toBe("https://gateway.example.com/v1");
+  });
   it("does not alter providers without a known env knob", () => {
     const providers = { custom: sampleProvider("http://file/v1", "m") };
     const out = applyEnvOverrides(providers, { LLAMACPP_BASE_URL: "http://env/v1" });
@@ -196,9 +201,24 @@ describe("shipped models.json", () => {
     expect(lmstudio.models.find((m) => m.id === "local-model")).toBeDefined();
   });
 
+  it("registers the orcarouter gateway on https://api.orcarouter.ai/v1", () => {
+    const result = loadProviders(pkgRoot, {});
+    const orcarouter = result.providers.orcarouter;
+    expect(orcarouter, "orcarouter provider should be present in shipped models.json").toBeDefined();
+    expect(orcarouter.baseUrl).toBe("https://api.orcarouter.ai/v1");
+    expect(orcarouter.api).toBe("openai-completions");
+    expect(orcarouter.apiKey).toBe("ORCAROUTER_API_KEY");
+    expect(orcarouter.models.find((m) => m.id === "orcarouter/auto")).toBeDefined();
+  });
+
   it("still registers llamacpp and ollama alongside lmstudio", () => {
     const result = loadProviders(pkgRoot, {});
-    expect(Object.keys(result.providers).sort()).toEqual(["llamacpp", "lmstudio", "ollama"]);
+    expect(Object.keys(result.providers).sort()).toEqual([
+      "llamacpp",
+      "lmstudio",
+      "ollama",
+      "orcarouter",
+    ]);
   });
 });
 

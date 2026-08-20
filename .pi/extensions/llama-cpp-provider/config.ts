@@ -51,6 +51,7 @@ const LEGACY_BASE_URL_ENV: Record<string, string> = {
   llamacpp: "LLAMACPP_BASE_URL",
   ollama: "OLLAMA_BASE_URL",
   lmstudio: "LMSTUDIO_BASE_URL",
+  orcarouter: "ORCAROUTER_BASE_URL",
 };
 
 /** Resolution order for the user-override file. First existing path wins. */
