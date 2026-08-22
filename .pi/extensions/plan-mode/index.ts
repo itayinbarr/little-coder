@@ -1,4 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { injectionResult } from "../_shared/inject.ts";
+import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
+import { enterPhase } from "../phase-model/index.ts";
+import { currentModelId } from "../subagent/index.ts";
 import {
   runSubCoder,
   runSubCodersConcurrent,
@@ -7,11 +13,14 @@ import {
   type SubCoderResult,
 } from "../subagent/spawn.ts";
 import { SubCoderTracker } from "../subagent/tracker.ts";
-import { currentModelId } from "../subagent/index.ts";
-import { enterPhase } from "../phase-model/index.ts";
 import { PlanStatus } from "./status.ts";
-import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
-import { injectionResult } from "../_shared/inject.ts";
+
+// Approved plans are persisted project-locally so they survive the planning
+// session and can be picked up later by the user-initiated /implement command.
+const APPROVED_PLAN_FILE = join(".pi", "approved-plan.md");
+
+const APPROVE_CHOICE = "Approve plan";
+const KEEP_PLANNING_CHOICE = "Keep planning (don't implement)";
 
 // Plan Mode — a Claude-Code-style "research, ask, then plan" flow.
 //
@@ -44,16 +53,20 @@ const INDICATOR_KEY = "plan-mode";
 
 let planModeOn = false;
 let orchestrating = false;
+
 // True only while the synthesis turn runs — blocks edits/writes so plan mode
 // produces a plan, not changes.
 let planGuardActive = false;
+
 let currentAbort: AbortController | null = null;
+
 // Set just before the synthesis turn; consumed by before_agent_start to inject
 // the planning instructions + research into the system prompt (kept out of the
 // visible chat). Null at all other times.
 let pendingSynthesis: { digest: string; answers: string } | null = null;
+
 // True while the plan-writing turn is in flight; on its agent_end we prompt the
-// user to approve & implement.
+// user to approve the generated plan.
 let synthesisActive = false;
 
 function indicatorLines(): string[] {
@@ -66,7 +79,9 @@ function indicatorLines(): string[] {
 
 function setIndicator(ctx: any, on: boolean): void {
   if (!ctx?.hasUI) return;
-  ctx.ui.setWidget(INDICATOR_KEY, on ? indicatorLines() : undefined, { placement: "belowEditor" });
+  ctx.ui.setWidget(INDICATOR_KEY, on ? indicatorLines() : undefined, {
+    placement: "belowEditor",
+  });
 }
 
 // Whether the session should open already in plan mode (issue #84). Set by the
@@ -76,6 +91,7 @@ function setIndicator(ctx: any, on: boolean): void {
 export function wantsPlanModeAtStart(): boolean {
   if (process.env.LITTLE_CODER_PLAN_MODE !== "1") return false;
   if (process.env.LITTLE_CODER_SUBAGENT === "1") return false;
+
   const argv = process.argv;
   return !argv.includes("--mode") && !argv.includes("-p");
 }
@@ -85,7 +101,9 @@ export function wantsPlanModeAtStart(): boolean {
 export function extractJsonArray(text: string): any[] {
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
+
   if (start < 0 || end <= start) return [];
+
   try {
     const v = JSON.parse(text.slice(start, end + 1));
     return Array.isArray(v) ? v : [];
@@ -94,8 +112,21 @@ export function extractJsonArray(text: string): any[] {
   }
 }
 
-async function reason(task: string, cwd: string, model: string | undefined, signal: AbortSignal): Promise<string> {
-  const r = await runSubCoder({ id: "r", label: "planner", task, cwd, model, signal });
+async function reason(
+  task: string,
+  cwd: string,
+  model: string | undefined,
+  signal: AbortSignal,
+): Promise<string> {
+  const r = await runSubCoder({
+    id: "r",
+    label: "planner",
+    task,
+    cwd,
+    model,
+    signal,
+  });
+
   return r.report;
 }
 
@@ -119,13 +150,24 @@ async function decomposeTargets(
     model,
     signal,
   );
+
   const parsed = extractJsonArray(text)
     .filter((t) => t && typeof t.task === "string")
     .slice(0, 4)
-    .map((t, i) => ({ label: String(t.label || `area ${i + 1}`).slice(0, 24), task: String(t.task) }));
+    .map((t, i) => ({
+      label: String(t.label || `area ${i + 1}`).slice(0, 24),
+      task: String(t.task),
+    }));
+
   if (parsed.length > 0) return parsed;
+
   // Fallback: a single broad exploration of the request itself.
-  return [{ label: "explore", task: `Investigate this repository to inform: ${prompt}` }];
+  return [
+    {
+      label: "explore",
+      task: `Investigate this repository to inform: ${prompt}`,
+    },
+  ];
 }
 
 interface Question {
@@ -149,62 +191,304 @@ async function generateQuestions(
     model,
     signal,
   );
+
   return extractJsonArray(text)
     .filter((q) => q && typeof q.q === "string")
     .slice(0, 3)
     .map((q) => ({
       q: String(q.q),
-      options: (Array.isArray(q.options) ? q.options : []).map((o: any) => String(o)).filter(Boolean).slice(0, 3),
+      options: (Array.isArray(q.options) ? q.options : [])
+        .map((o: any) => String(o))
+        .filter(Boolean)
+        .slice(0, 3),
     }));
 }
 
 export function digestReports(results: SubCoderResult[]): string {
   return results
-    .map((r) => `### ${r.label}\n${r.exitCode === 0 ? truncateReport(r.report) : `(failed: ${r.errorMessage || "no output"})`}`)
+    .map(
+      (r) =>
+        `### ${r.label}\n${
+          r.exitCode === 0
+            ? truncateReport(r.report)
+            : `(failed: ${r.errorMessage || "no output"})`
+        }`,
+    )
     .join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// issue #98 — plan text extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the plan text from the most recent assistant message in a message list.
+ *
+ * Inspects only the latest assistant message. Concatenates all text parts in
+ * order with "\n" separator and trims. Does NOT fall back to an older
+ * assistant response if the latest has no usable text.
+ */
+export function extractPlanText(messages: unknown[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as any;
+
+    if (msg?.role !== "assistant") {
+      continue;
+    }
+
+    if (Array.isArray(msg.content)) {
+      const parts: string[] = [];
+
+      for (const part of msg.content) {
+        if (part?.type === "text" && typeof part.text === "string") {
+          parts.push(part.text);
+        }
+      }
+
+      return parts.join("\n").trim();
+    }
+
+    break;
+  }
+
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// issue #98 — approved-plan persistence
+// ---------------------------------------------------------------------------
+
+interface PlanFs {
+  writeFileSync(path: string, content: string, options?: any): void;
+  mkdirSync(path: string, opts: { recursive: boolean }): void;
+  readFileSync(path: string, options?: any): string;
+}
+
+type PlanNoticeType = "info" | "warning" | "error";
+
+interface PlanUi {
+  notify(msg: string, type?: PlanNoticeType): void;
+}
+
+interface PlanApprovalDeps {
+  planText: string;
+  approved: boolean;
+  planFile: string;
+  fs: PlanFs;
+  ui: PlanUi;
+}
+
+/**
+ * Persist an approved plan for later execution via /implement.
+ *
+ * Approval itself does not switch models, replace the session, or begin
+ * implementation. pi exposes newSession() only to command handlers, so the
+ * destructive transition remains explicitly user-initiated.
+ */
+export function handlePlanApproval(deps: PlanApprovalDeps): boolean {
+  if (!deps.approved) {
+    deps.ui.notify(
+      "plan not approved — refine your request, or ctrl-q to start another plan",
+      "info",
+    );
+    return false;
+  }
+
+  const planText = deps.planText.trim();
+
+  if (!planText) {
+    deps.ui.notify(
+      "plan could not be captured — refine your request or ctrl-q to start another plan",
+      "warning",
+    );
+    return false;
+  }
+
+  const planDir = dirname(deps.planFile);
+
+  try {
+    deps.fs.mkdirSync(planDir, { recursive: true });
+    deps.fs.writeFileSync(deps.planFile, planText, "utf-8");
+  } catch (err) {
+    deps.ui.notify(
+      `failed to save plan: ${(err as Error).message}`,
+      "warning",
+    );
+    return false;
+  }
+
+  deps.ui.notify(
+    `plan saved to ${deps.planFile} — run /implement when you are ready to execute it in a clean session`,
+    "info",
+  );
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// issue #98 — /implement command handler (extracted for testability)
+// ---------------------------------------------------------------------------
+
+interface ImplementDeps {
+  cwd: string;
+  planFile: string;
+  ui: PlanUi;
+  fs: PlanFs;
+  pi: ExtensionAPI;
+  ctx: any;
+  enterPhase: (pi: ExtensionAPI, ctx: any, phase: "plan" | "action") => Promise<string | undefined>;
+  newSession: (
+    opts?: { setup?: (sm: any) => Promise<void>; withSession?: (ctx: any) => Promise<void> },
+  ) => Promise<{ cancelled: boolean }>;
+}
+
+/**
+ * Execute the approved plan in a fresh session.
+ *
+ * Reads the saved plan, switches to the action phase, replaces the session
+ * (seeding it with the plan), and sends the implementation instruction.
+ * Does not modify the persisted plan file.
+ *
+ * Ordering: read/validate plan → enter action phase → newSession → setup → withSession.
+ */
+export async function handleImplement(deps: ImplementDeps): Promise<void> {
+  // Validate the saved plan before switching models or replacing anything.
+  let approvedPlan: string;
+
+  try {
+    approvedPlan = deps.fs.readFileSync(deps.planFile, "utf-8").trim();
+  } catch (err) {
+    deps.ui.notify(
+      `could not read approved plan at ${deps.planFile}: ${(err as Error).message}`,
+      "warning",
+    );
+    return;
+  }
+
+  if (!approvedPlan) {
+    deps.ui.notify(
+      `approved plan at ${deps.planFile} is empty — create and approve a plan first`,
+      "warning",
+    );
+    return;
+  }
+
+  // Phase-model handover happens when implementation actually begins,
+  // rather than when the user merely approves the plan.
+  const switched = await deps.enterPhase(deps.pi, deps.ctx, "action");
+
+  if (switched) {
+    deps.ui.notify(switched, "info");
+  }
+
+  let result: { cancelled: boolean };
+
+  try {
+    result = await deps.newSession({
+      // Seed the new SessionManager before pi rebuilds the fresh agent
+      // context. The hidden custom message participates in LLM context but
+      // does not appear as another user-visible message.
+      setup: async (sessionManager) => {
+        sessionManager.appendCustomMessageEntry(
+          "lc-approved-plan",
+          `## Approved implementation plan\n\n${approvedPlan}`,
+          false,
+          {
+            source: deps.planFile,
+          },
+        );
+      },
+
+      // This callback receives the replacement-session context. Never use the
+      // old command ctx here.
+      withSession: async (newCtx) => {
+        await newCtx.sendUserMessage(
+          "Implement the approved plan provided in this session context. Make the actual file changes now.",
+        );
+      },
+    });
+  } catch (err) {
+    deps.ui.notify(
+      `session replacement failed: ${(err as Error).message}`,
+      "error",
+    );
+    return;
+  }
+
+  if (result.cancelled) {
+    deps.ui.notify(
+      `session replacement cancelled — approved plan remains at ${deps.planFile}`,
+      "info",
+    );
+  }
 }
 
 const OTHER_SENTINEL = "✎ Other (type my own answer)";
 
-async function askQuestions(ctx: any, questions: Question[]): Promise<string> {
+async function askQuestions(
+  ctx: any,
+  questions: Question[],
+): Promise<string> {
   const answered: string[] = [];
+
   for (const q of questions) {
     const options = [...q.options, OTHER_SENTINEL].filter(Boolean);
+
     let choice: string | undefined;
+
     try {
       choice = await ctx.ui.select(q.q, options);
     } catch {
       choice = undefined;
     }
+
     if (choice === undefined) {
       answered.push(`Q: ${q.q}\nA: (skipped)`);
       continue;
     }
+
     if (choice === OTHER_SENTINEL) {
       let typed: string | undefined;
+
       try {
         typed = await ctx.ui.input(q.q, "Type your answer");
       } catch {
         typed = undefined;
       }
-      answered.push(`Q: ${q.q}\nA: ${typed?.trim() || "(no answer)"}`);
+
+      answered.push(
+        `Q: ${q.q}\nA: ${typed?.trim() || "(no answer)"}`,
+      );
     } else {
       answered.push(`Q: ${q.q}\nA: ${choice}`);
     }
   }
+
   return answered.join("\n\n");
 }
 
-async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<void> {
+async function orchestrate(
+  pi: ExtensionAPI,
+  ctx: any,
+  prompt: string,
+): Promise<void> {
   orchestrating = true;
+
   const abort = new AbortController();
   currentAbort = abort;
+
   // One continuous timer for the whole plan-mode process — every phase widget
   // counts from t0, so the user sees total elapsed throughout (not just the
   // per-sub-coder timers).
   const t0 = Date.now();
-  const tracker = new SubCoderTracker(ctx, { key: "plan-explorers", totalSince: t0 });
+
+  const tracker = new SubCoderTracker(ctx, {
+    key: "plan-explorers",
+    totalSince: t0,
+  });
+
   const status = new PlanStatus(ctx);
+
   // Per-phase model selection (issue #61). Switch the SESSION to the plan model
   // first, so the synthesis turn below — which runs on the main agent, not on a
   // sub-coder — is written by the planner too.
@@ -216,7 +500,11 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
   // cannot serve — and on a single local backend, a child on a different model
   // forces a weight reload the user did not ask for.
   const switched = await enterPhase(pi, ctx, "plan");
-  if (switched) ctx.ui?.notify?.(switched, "info");
+
+  if (switched) {
+    ctx.ui?.notify?.(switched, "info");
+  }
+
   const model = currentModelId(ctx);
 
   // ESC (or Ctrl+C) cancels the plan: there's no agent turn running during the
@@ -228,23 +516,34 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
         abort.abort();
         return { consume: true };
       }
+
       return undefined;
     }) ?? null;
+
   const dropEsc = () => {
     try {
       escUnsub?.();
     } catch {
-      /* ignore */
+      // ignore
     }
+
     escUnsub = null;
   };
 
   // The "submit a request" hint is done — plan mode is now working. Swap it for
   // the animated status line.
   setIndicator(ctx, false);
+
   try {
     status.start("deciding what to explore…", t0);
-    const targets = await decomposeTargets(prompt, ctx.cwd, model, abort.signal);
+
+    const targets = await decomposeTargets(
+      prompt,
+      ctx.cwd,
+      model,
+      abort.signal,
+    );
+
     if (abort.signal.aborted) return;
 
     const items: SubCoderItem[] = targets.map((t, i) => ({
@@ -253,28 +552,52 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
       task: t.task,
       cwd: ctx.cwd,
     }));
+
     // Hand the visual off to the tracker for the research phase — running both
     // animated aboveEditor widgets at once made the panel flicker.
     status.stop();
-    tracker.begin(items.map((it) => ({ id: it.id, label: it.label })));
+
+    tracker.begin(
+      items.map((it) => ({
+        id: it.id,
+        label: it.label,
+      })),
+    );
+
     const results = await runSubCodersConcurrent(items, {
       model,
       signal: abort.signal,
       onUpdate: (all) => tracker.update(all),
     });
+
     tracker.end();
+
     if (abort.signal.aborted) return;
 
     const digest = digestReports(results);
+
     status.start("preparing clarifying questions…", t0);
-    const questions = await generateQuestions(prompt, digest, ctx.cwd, model, abort.signal);
+
+    const questions = await generateQuestions(
+      prompt,
+      digest,
+      ctx.cwd,
+      model,
+      abort.signal,
+    );
+
     if (abort.signal.aborted) return;
 
     // Questions are ready: stop the animation and stop intercepting ESC so the
     // dialogs (and the synthesis turn after) handle their own keys.
     status.stop();
     dropEsc();
-    const answers = questions.length > 0 ? await askQuestions(ctx, questions) : "(no clarifying questions)";
+
+    const answers =
+      questions.length > 0
+        ? await askQuestions(ctx, questions)
+        : "(no clarifying questions)";
+
     if (abort.signal.aborted) return;
 
     // Hand the synthesis to the main agent so the plan appears in the chat. The
@@ -285,17 +608,27 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
     planGuardActive = true;
     synthesisActive = true;
     pendingSynthesis = { digest, answers };
+
     ctx.ui?.notify?.("plan mode: writing the plan…", "info");
+
     pi.sendUserMessage(prompt);
   } catch (e) {
-    ctx.ui?.notify?.(`plan mode failed: ${(e as Error)?.message ?? e}`, "error");
+    ctx.ui?.notify?.(
+      `plan mode failed: ${(e as Error)?.message ?? e}`,
+      "error",
+    );
   } finally {
-    if (abort.signal.aborted) ctx.ui?.notify?.("plan mode cancelled", "info");
+    if (abort.signal.aborted) {
+      ctx.ui?.notify?.("plan mode cancelled", "info");
+    }
+
     dropEsc();
     status.stop();
     tracker.end();
+
     orchestrating = false;
     currentAbort = null;
+
     // One request per plan-mode activation — drop back to normal mode.
     planModeOn = false;
     setIndicator(ctx, false);
@@ -311,11 +644,43 @@ export default function (pi: ExtensionAPI) {
   // terminals deliver as a literal "π" rather than ESC+p, so the toggle never fired.
   pi.registerShortcut("ctrl+q", {
     description: "Toggle plan mode",
+
     handler: (ctx: any) => {
-      if (orchestrating) return; // mid-plan: ignore toggles
+      if (orchestrating) return;
+
       planModeOn = !planModeOn;
+
       setIndicator(ctx, planModeOn);
-      ctx.ui?.notify?.(planModeOn ? "plan mode on" : "plan mode off", "info");
+
+      ctx.ui?.notify?.(
+        planModeOn ? "plan mode on" : "plan mode off",
+        "info",
+      );
+    },
+  });
+
+  // issue #98:
+  //
+  // Session replacement is deliberately initiated from a command handler.
+  // pi's command context owns newSession(); event handlers such as agent_end do
+  // not. This also gives the user explicit control over when the approved plan
+  // leaves the planning context and begins implementation.
+  pi.registerCommand("implement", {
+    description: "Implement the last approved plan in a fresh session",
+
+    handler: async (_args, ctx) => {
+      const planFile = join(ctx.cwd, APPROVED_PLAN_FILE);
+
+      await handleImplement({
+        cwd: ctx.cwd,
+        planFile,
+        ui: ctx.ui ?? { notify: () => {} },
+        fs: { readFileSync, mkdirSync, writeFileSync },
+        pi,
+        ctx,
+        enterPhase,
+        newSession: (opts) => ctx.newSession(opts),
+      });
     },
   });
 
@@ -324,17 +689,32 @@ export default function (pi: ExtensionAPI) {
   pi.on("input", async (event, ctx) => {
     if (!planModeOn) return;
     if ((event as any).source !== "interactive") return;
+
     const text = String((event as any).text ?? "").trim();
+
     // Let commands and bash through untouched even in plan mode.
-    if (!text || text.startsWith("/") || text.startsWith("!")) return;
-    if (orchestrating) {
-      (ctx as any).ui?.notify?.("a plan is already in progress…", "warning");
-      return { action: "handled" as const };
+    if (!text || text.startsWith("/") || text.startsWith("!")) {
+      return;
     }
+
+    if (orchestrating) {
+      (ctx as any).ui?.notify?.(
+        "a plan is already in progress…",
+        "warning",
+      );
+
+      return {
+        action: "handled" as const,
+      };
+    }
+
     // Fire-and-forget: returning {handled} suppresses the normal turn; the
     // orchestration (dialogs, sub-coders, final synthesis) runs after.
     void orchestrate(pi, ctx, text);
-    return { action: "handled" as const };
+
+    return {
+      action: "handled" as const,
+    };
   });
 
   // Inject the planning instructions + research into the synthesis turn, kept
@@ -344,8 +724,10 @@ export default function (pi: ExtensionAPI) {
   // prefix survives the turn (issue #73 — see _shared/inject.ts).
   pi.on("before_agent_start", async (event) => {
     if (!pendingSynthesis) return;
+
     const { digest, answers } = pendingSynthesis;
     pendingSynthesis = null;
+
     const block =
       `\n\n## Plan Mode\n` +
       `The user's message is a request to PLAN, not to implement. Write a concrete, ` +
@@ -354,58 +736,84 @@ export default function (pi: ExtensionAPI) {
       `create files.\n\n` +
       `### Research findings\n${digest}\n\n` +
       `### User's answers to clarifying questions\n${answers}`;
-    return injectionResult("lc-plan", block, (event as any).systemPrompt ?? "");
+
+    return injectionResult(
+      "lc-plan",
+      block,
+      (event as any).systemPrompt ?? "",
+    );
   });
 
   // While synthesizing the plan, block any attempt to edit/write files.
   pi.on("tool_call", async (event, ctx) => {
     if (!planGuardActive) return;
-    const name = String((event as any).toolName ?? "").toLowerCase();
-    if (name !== "edit" && name !== "write") return;
-    (ctx as any).ui?.notify?.("harness intervention: plan mode — emit the plan as text, not file changes.", "info");
+
+    const name = String(
+      (event as any).toolName ?? "",
+    ).toLowerCase();
+
+    if (name !== "edit" && name !== "write") {
+      return;
+    }
+
+    (ctx as any).ui?.notify?.(
+      "harness intervention: plan mode — emit the plan as text, not file changes.",
+      "info",
+    );
+
     return {
       block: true,
-      reason: "Plan mode is active: produce the implementation plan as text in your reply. Do NOT edit or create files.",
+      reason:
+        "Plan mode is active: produce the implementation plan as text in your reply. Do NOT edit or create files.",
     };
   });
 
-  // When a turn ends: if it was the plan-synthesis turn, the plan is now on
-  // screen — ask the user to approve before implementing. On approval we hand
-  // an "implement it" message to the agent with the edit/write guard lifted.
+  // When the synthesis turn ends, capture the generated plan and let the user
+  // approve it. Approval persists the plan only. It deliberately does not
+  // switch to the action model, replace the session, or begin implementation.
+  // The user starts that destructive transition explicitly with /implement.
   pi.on("agent_end", async (_event, ctx) => {
     planGuardActive = false;
+
     if (!synthesisActive) return;
+
     synthesisActive = false;
+
+    const messages = (_event as any).messages ?? [];
+    const planText = extractPlanText(messages);
+
     let choice: string | undefined;
+
     try {
-      choice = await (ctx as any).ui?.select?.("Plan ready — implement it?", [
-        "Approve & implement",
-        "Keep planning (don't implement)",
-      ]);
+      choice = await (ctx as any).ui?.select?.(
+        "Plan ready — approve it?",
+        [
+          APPROVE_CHOICE,
+          KEEP_PLANNING_CHOICE,
+        ],
+      );
     } catch {
       choice = undefined;
     }
-    if (choice === "Approve & implement") {
-      // The handover (issue #61): approving is the moment planning ends, so the
-      // action model takes over here. Awaited before the message is queued so
-      // the implementation turn actually runs on the new model rather than
-      // racing the switch. A no-op under manual handover, or when plan and
-      // action resolve to the same model — which is what keeps a single-backend
-      // local setup from reloading identical weights on every approval.
-      const switched = await enterPhase(pi, ctx, "action");
-      if (switched) (ctx as any).ui?.notify?.(switched, "info");
-      // deliverAs: pi is still settling the just-ended synthesis turn (this
-      // agent_end handler is itself part of that processing), so an immediate
-      // send is rejected as "already processing" — queue it as a follow-up.
-      pi.sendUserMessage("Implement the plan you just described — make the actual file changes now.", {
-        deliverAs: "followUp",
-      });
-    } else {
-      (ctx as any).ui?.notify?.(
-        "plan not implemented — refine your request, or ctrl-q to leave plan mode",
-        "info",
-      );
-    }
+
+    const planFile = join(
+      ctx.cwd,
+      APPROVED_PLAN_FILE,
+    );
+
+    handlePlanApproval({
+      planText,
+      approved: choice === APPROVE_CHOICE,
+      planFile,
+      fs: {
+        writeFileSync,
+        mkdirSync,
+        readFileSync,
+      },
+      ui: ctx.ui ?? {
+        notify: () => {},
+      },
+    });
   });
 
   // A new/resumed session resets all plan-mode state. It opens in plan mode when
@@ -416,9 +824,15 @@ export default function (pi: ExtensionAPI) {
     planGuardActive = false;
     synthesisActive = false;
     pendingSynthesis = null;
-    if (currentAbort) currentAbort.abort();
+
+    if (currentAbort) {
+      currentAbort.abort();
+    }
+
     currentAbort = null;
+
     planModeOn = wantsPlanModeAtStart();
+
     setIndicator(ctx, planModeOn);
   });
 }
