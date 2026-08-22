@@ -69,7 +69,7 @@ The agent uses the directory you launched it from as its working directory — `
 
 ### Interactive features
 
-- **Plan Mode** — press **ctrl+q** to toggle (a `◆ PLAN MODE` indicator shows below the input), or launch with **`--plan-mode`** (`LITTLE_CODER_PLAN_MODE=1`) to start there. Submit a request and little-coder researches it with sub-coders, asks you 1-3 clarifying questions (each with suggested answers and a free-text option), then writes a plan in the chat instead of editing anything. **Esc** cancels a plan mid-run. (**shift+tab** stays pi's thinking-level cycle.)
+- **Plan Mode** — press **ctrl+q** to toggle (a `◆ PLAN MODE` indicator shows below the input), or launch with **`--plan-mode`** (`LITTLE_CODER_PLAN_MODE=1`) to start there. Submit a request and little-coder researches it with sub-coders, asks you 1-3 clarifying questions (each with suggested answers and a free-text option), then writes a plan in the chat instead of editing anything. Approving it saves the plan to `.pi/approved-plan.md` and stops there; **`/implement`** is what switches to the action model, opens a fresh session seeded with the plan, and starts the work, so the research and Q&A that produced the plan do not eat the context the implementation needs ([#98](https://github.com/itayinbarr/little-coder/issues/98)). **Esc** cancels a plan mid-run. (**shift+tab** stays pi's thinking-level cycle.)
 - **Deep Research** — press **f2** (or run `/deep-research <topic>`) to scope a topic into a research brief, fan out read-only research sub-coders, and get back one cited markdown report, saved next to your working directory. **Esc** cancels mid-run.
 - **Keyboard shortcuts** — press **ctrl+h** for a panel of the keys worth knowing; `/hotkeys` is the full reference. **ctrl+o** expands tool output ("more"), **ctrl+t** toggles thinking blocks, **ctrl+p** cycles models.
 - **Prompt history** — from an empty input, **↑** recalls your recent prompts (most-recent first), **↓** walks forward. History persists across sessions, so a fresh session can recall prompts from earlier runs.
@@ -333,10 +333,11 @@ Plan on a big model, implement on a small one, without retyping ctrl+P at every 
 | `/action-model <name>` | model for implementation |
 | `/phase-models` | show both, plus the active model and handover mode |
 | `/model-handover auto\|manual` | whether little-coder switches models for you |
+| `/implement` | run the last approved plan in a fresh session on the action model |
 
 Defaults come from `models.json` (`"planModel"` / `"actionModel"` / `"handover"`) or the environment (`LITTLE_CODER_PLAN_MODEL`, `LITTLE_CODER_ACTION_MODEL`, `LITTLE_CODER_MODEL_HANDOVER`), but the tags are **session state** — settable mid-session, because the case that motivated this is A/B-ing two planners against the same brief.
 
-With `auto` (default), entering Plan Mode switches to the plan model and approving a plan hands over to the action model. With `manual`, the tags are shown but nothing switches on your behalf. That toggle matters more locally than it would on a hosted provider: **on a single llama.cpp backend a handover evicts and reloads weights**, so an automatic switch can mean a 15-second stall mid-thought. A handover where both phases resolve to the same model is a no-op rather than a reload, and a switch that fails (model unavailable, no key) degrades to staying put and says so. Leave both unset and nothing changes — each phase uses the active model.
+With `auto` (default), entering Plan Mode switches to the plan model and `/implement` hands over to the action model. The handover happens when implementation actually begins rather than at approval, so approving a plan you then decide to rewrite costs you nothing. With `manual`, the tags are shown but nothing switches on your behalf. That toggle matters more locally than it would on a hosted provider: **on a single llama.cpp backend a handover evicts and reloads weights**, so an automatic switch can mean a 15-second stall mid-thought. A handover where both phases resolve to the same model is a no-op rather than a reload, and a switch that fails (model unavailable, no key) degrades to staying put and says so. Leave both unset and nothing changes — each phase uses the active model.
 
 ## Permissions
 

@@ -3,6 +3,7 @@ import setupWatchdog, {
   thresholdPercent,
   shouldCompactNow,
   compactionHelped,
+  classifyCompactionError,
   MIN_PROGRESS_PCT,
   RESUME_MESSAGE,
   type ContextUsageLike,
@@ -226,6 +227,178 @@ describe("shouldCompactNow", () => {
       await handlers.turn_start({}, ctx);
       await handlers.turn_start({}, ctx);
       expect(compact).toHaveBeenCalledTimes(1); // still paused, never re-fired
+    } finally {
+      if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+      else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
+    }
+  });
+
+  describe("classifyCompactionError", () => {
+    it("reads 'Already compacted' as another compaction having landed", () => {
+      expect(classifyCompactionError("Already compacted")).toBe("already");
+      expect(classifyCompactionError("Compaction failed: Already compacted")).toBe("already");
+    });
+
+    it("reads an abort/cancel as neither a failure nor a success", () => {
+      expect(classifyCompactionError("Compaction cancelled")).toBe("cancelled");
+      expect(classifyCompactionError("The operation was aborted")).toBe("cancelled");
+    });
+
+    it("reads everything else as a real failure", () => {
+      expect(classifyCompactionError("Nothing to compact (session too small)")).toBe("failed");
+      expect(classifyCompactionError(undefined)).toBe("failed");
+      expect(classifyCompactionError("fetch failed")).toBe("failed");
+    });
+  });
+
+  it("#109/#91: 'Already compacted' resumes the run instead of pausing", async () => {
+    const env = process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+    process.env.LITTLE_CODER_COMPACT_AT_PERCENT = "80";
+    try {
+      const handlers: Record<string, Function> = {};
+      const sendUserMessage = vi.fn();
+      const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+      setupWatchdog(pi as any);
+
+      let percent = 88;
+      const compact = vi.fn();
+      const notify = vi.fn();
+      const ctx = {
+        getContextUsage: () => ({ tokens: 56000, contextWindow: 64000, percent }),
+        ui: { notify },
+        compact,
+      };
+
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(1);
+
+      // pi's own compaction landed first, so ours is refused. guppy42's report:
+      // the run halted here and had to be restarted by typing "resume".
+      compact.mock.calls[0][0].onError(new Error("Already compacted"));
+
+      expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE);
+      expect(notify).not.toHaveBeenCalledWith(
+        expect.stringContaining("could not proceed"),
+        "warning",
+      );
+
+      // Armed, not paused: once the compacted context climbs back over the
+      // threshold the watchdog still does its job.
+      percent = 40;
+      await handlers.before_agent_start({}, ctx);
+      await handlers.turn_start({}, ctx);   // measures 40%, the compaction helped
+      percent = 88;
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(2);
+    } finally {
+      if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+      else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
+    }
+  });
+
+  it("#108: a compaction settling after the session is gone never throws", async () => {
+    const env = process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+    process.env.LITTLE_CODER_COMPACT_AT_PERCENT = "80";
+    try {
+      const handlers: Record<string, Function> = {};
+      // pi invalidates the whole extension runtime on dispose: the ctx.ui getter
+      // and pi.sendUserMessage both throw from that point on. pi calls our
+      // callbacks from a floating promise, so a throw here is an unhandled
+      // rejection that exits the process: heinrichI's sub-coder crash.
+      let live = true;
+      const stale = () => { throw new Error("This extension ctx is stale after session replacement or reload."); };
+      const notify = vi.fn(() => { if (!live) stale(); });
+      const sendUserMessage = vi.fn(() => { if (!live) stale(); });
+      const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+      setupWatchdog(pi as any);
+
+      const compact = vi.fn();
+      const ctx = {
+        getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
+        get ui() { if (!live) stale(); return { notify }; },
+        compact,
+      };
+
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(1);
+
+      live = false; // headless -p disposed the session the moment it settled
+
+      // Each of the three outcomes must survive a dead session.
+      expect(() => compact.mock.calls[0][0].onComplete()).not.toThrow();
+      expect(() => compact.mock.calls[0][0].onError(new Error("Compaction cancelled"))).not.toThrow();
+      expect(() => compact.mock.calls[0][0].onError(new Error("Nothing to compact (session too small)"))).not.toThrow();
+      expect(() => compact.mock.calls[0][0].onError(new Error("Already compacted"))).not.toThrow();
+    } finally {
+      if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+      else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
+    }
+  });
+
+  it("#108: a cancelled compaction is silent and leaves the watchdog armed", async () => {
+    const env = process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+    process.env.LITTLE_CODER_COMPACT_AT_PERCENT = "80";
+    try {
+      const handlers: Record<string, Function> = {};
+      const sendUserMessage = vi.fn();
+      const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+      setupWatchdog(pi as any);
+
+      const compact = vi.fn();
+      const notify = vi.fn();
+      const ctx = {
+        getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
+        ui: { notify },
+        compact,
+      };
+
+      await handlers.turn_start({}, ctx);
+      compact.mock.calls[0][0].onError(new Error("Compaction cancelled"));
+
+      // No warning, no resume: an abort is not a failure to report.
+      expect(notify).not.toHaveBeenCalledWith(expect.anything(), "warning");
+      expect(sendUserMessage).not.toHaveBeenCalled();
+
+      // Still armed: the next over-threshold turn fires again.
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(2);
+    } finally {
+      if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+      else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
+    }
+  });
+
+  it("a turn boundary during an in-flight compaction does not let a second one fire", async () => {
+    const env = process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+    process.env.LITTLE_CODER_COMPACT_AT_PERCENT = "80";
+    try {
+      const handlers: Record<string, Function> = {};
+      const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage: vi.fn() };
+      setupWatchdog(pi as any);
+
+      const compact = vi.fn();
+      const ctx = {
+        getContextUsage: () => ({ tokens: 56000, contextWindow: 64000, percent: 88 }),
+        ui: { notify: vi.fn() },
+        compact,
+      };
+
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(1);
+
+      // pi's compact() aborts the run and reconnects the agent while it is still
+      // summarizing, so a fresh turn can begin mid-compaction. Dropping the
+      // in-flight flag there is what let a second call fire on top of the first
+      // The loser of that race is the "Already compacted" in #109.
+      await handlers.before_agent_start({}, ctx);
+      await handlers.turn_start({}, ctx);
+      expect(compact).toHaveBeenCalledTimes(1);
+
+      // Once it settles, a later boundary is free to clear the flag again.
+      compact.mock.calls[0][0].onComplete();
+      await handlers.before_agent_start({}, ctx);
+      await handlers.turn_start({}, ctx);   // measures 88% (helped nothing) → pause
+      expect(compact).toHaveBeenCalledTimes(1);
     } finally {
       if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
       else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;

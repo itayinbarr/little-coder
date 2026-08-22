@@ -123,6 +123,40 @@ describe("detectWriteTargets — non-destructive devices (issue #87)", () => {
   });
 });
 
+describe("detectWriteTargets: control operators end the target word (issue #107)", () => {
+  // ashalliants: the #87 exemption only held when the device path was followed
+  // by whitespace or end-of-string. With a chained command butted straight up
+  // against it, the target parsed as `/dev/null;` (not a device the exemption
+  // knows), and an ordinary two-`find` one-liner was refused as a file write.
+  it("does not flag a device redirect followed immediately by a chain operator", () => {
+    expect(
+      detectWriteTargets('find /x -name "y" 2>/dev/null; find /z -name "w" 2>/dev/null'),
+    ).toEqual([]);
+    expect(detectWriteTargets("ls >/dev/null&& echo hi")).toEqual([]);
+    expect(detectWriteTargets("ls >/dev/null||true")).toEqual([]);
+    expect(detectWriteTargets("ls >/dev/null|cat")).toEqual([]);
+    expect(detectWriteTargets("(ls >/dev/null)")).toEqual([]);
+    expect(hasWriteRedirection('find . 2>/dev/null; echo ok')).toBe(false);
+  });
+
+  it("still reports a real file butted up against a chain operator", () => {
+    expect(detectWriteTargets("ls >out.log; echo hi")).toEqual([
+      { path: "out.log", kind: "redirect" },
+    ]);
+    expect(detectWriteTargets("ls >out.log&& echo hi")).toEqual([
+      { path: "out.log", kind: "redirect" },
+    ]);
+  });
+
+  it("keeps fd duplication and closing out of the results", () => {
+    expect(detectWriteTargets("make 2>&1")).toEqual([]);
+    expect(detectWriteTargets("cmd >&2")).toEqual([]);
+    expect(detectWriteTargets("cmd 2>&-")).toEqual([]);
+    expect(detectWriteTargets("cmd 2>&1; echo done")).toEqual([]);
+    expect(detectWriteTargets("cmd &>/dev/null")).toEqual([]);
+  });
+});
+
 describe("splitCommandChain", () => {
   it("splits on unquoted chain operators", () => {
     expect(splitCommandChain("ls && rm -rf / ; echo done | wc -l")).toEqual([

@@ -243,6 +243,10 @@ export function detectWriteTargets(raw: string): ShellWrite[] {
     const rest = cmd.slice(at);
     // Process substitution `>(cmd)` is not a file target.
     if (rest.trimStart().startsWith("(")) continue;
+    // fd duplication / close (`2>&1`, `>&2`, `>&-`): no file involved. Checked
+    // on the raw text because `&` is a word break, so `firstWord("&1")` is the
+    // descriptor number alone and no longer looks like fd syntax.
+    if (rest.startsWith("&")) continue;
     const target = firstWord(rest);
     if (!target || isFdTarget(target)) continue;
     writes.push({ path: unquote(target), kind });
@@ -296,7 +300,16 @@ function firstWord(s: string): string {
   return splitWords(s)[0] ?? "";
 }
 
-/** Split on unquoted whitespace, keeping quoted runs together. */
+// Unquoted characters that end a word even with no whitespace around them:
+// redirects (`cat>f` is two words) and the control operators that separate one
+// command from the next. Without the operators, `2>/dev/null;` parsed as a
+// redirect to the file `/dev/null;`, which is not the device the #87 exemption
+// knows about, so a perfectly ordinary chained `find ... 2>/dev/null; find ...`
+// was refused as an unsafe file write (issue #107). The same held for `&&`,
+// `||`, `|` and a closing subshell paren.
+const WORD_BREAKS = new Set([">", "<", ";", "&", "|", "(", ")"]);
+
+/** Split on unquoted whitespace and control operators, keeping quoted runs together. */
 function splitWords(s: string): string[] {
   const words: string[] = [];
   let cur = "";
@@ -323,8 +336,7 @@ function splitWords(s: string): string[] {
       cur = "";
       continue;
     }
-    // An unquoted redirect ends the current word (`cat>f` is two words).
-    if (quote === null && (ch === ">" || ch === "<")) {
+    if (quote === null && WORD_BREAKS.has(ch)) {
       if (cur) words.push(cur);
       cur = "";
       continue;

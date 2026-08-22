@@ -49,6 +49,39 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 // pauses the same way rather than silently retrying. The deep fix — detect the
 // incompressible tail and elide-rescue before giving up — belongs in the pi
 // runtime little-coder wraps and has been flagged upstream.
+//
+// ── Not every compaction "failure" is a failure (issues #91, #108, #109) ────
+// pi's `compact()` hands the extension a single promise with two outcomes, and
+// the #68 guard above treated *any* rejection as "compaction is futile, pause".
+// Two of the three rejection shapes are not that:
+//
+//   "Already compacted"   another compaction landed first (pi's own threshold
+//                         path, a user `/compact`, or a second in-flight call of
+//                         ours), so pi's prepareCompaction finds the branch's
+//                         last entry is a compaction and refuses. The context IS
+//                         compacted; the only thing that failed is our call. But
+//                         we pause and never send the resume message, so the run
+//                         halts mid-task and the user has to type "continue"
+//                         (guppy42, #109; charly1r's "it stops", #91).
+//   "Compaction cancelled" the run was aborted or the session is being torn down
+//                         (headless `-p` disposes as soon as the agent settles,
+//                         which is the sub-coder case). Nothing failed and there
+//                         is nothing to warn about.
+//
+// So outcomes are classified now: "already" resumes the run exactly like a
+// successful compaction, "cancelled" is silent, and only a real failure
+// ("Nothing to compact (session too small)", a provider error) still pauses.
+//
+// The crash in #108 is the other half of the same code path. Both callbacks run
+// *after* pi's compaction settles, by which point the session may have been
+// replaced or disposed, and pi invalidates the whole extension runtime on
+// `dispose()`, so the captured `ctx.ui` getter and `pi.sendUserMessage()` throw
+// "This extension ctx is stale after session replacement or reload". pi invokes
+// the callbacks from a floating `void (async () => …)()`, so that throw became
+// an unhandled rejection and took the process down with `exit 1` (heinrichI hit
+// it in a sub-coder, whose headless child disposes the moment it settles).
+// Nothing the watchdog reports is worth a crash: the UI handle is captured while
+// the ctx is known-good and every post-compaction use of it is best-effort.
 
 export interface ContextUsageLike {
   tokens: number | null;
@@ -87,6 +120,22 @@ export function thresholdPercent(env: NodeJS.ProcessEnv = process.env): number {
   if (!Number.isFinite(n)) return DEFAULT_PERCENT;
   if (n <= 0 || n >= 100) return 0;
   return n;
+}
+
+// How pi's compaction rejection should be read. `already` means a compaction
+// landed from somewhere else (pi's threshold path, a user `/compact`, a second
+// call of ours): the context is compacted, only our call lost the race.
+// `cancelled` means the run was aborted or the session is going away. `failed`
+// is everything else, and is the only one the #68 pause applies to.
+export type CompactionOutcome = "already" | "cancelled" | "failed";
+
+// Pure so the classification is unit-testable. Matches on message text because
+// that is all pi's `compact()` rejection carries.
+export function classifyCompactionError(message?: string): CompactionOutcome {
+  const m = (message ?? "").toLowerCase();
+  if (m.includes("already compacted")) return "already";
+  if (m.includes("cancel") || m.includes("abort")) return "cancelled";
+  return "failed";
 }
 
 // Pure decision: should we kick off compaction on this turn? True only when the
@@ -129,6 +178,15 @@ export default function (pi: ExtensionAPI) {
   // resolves (onComplete/onError), so a burst of turn_start events can't stack
   // multiple compaction calls on top of each other.
   let compacting = false;
+  // How many ctx.compact() calls have been made and not yet settled. `compacting`
+  // is cleared at every user-turn boundary so a lost callback can't wedge the
+  // watchdog off forever. But a compaction genuinely still in flight IS such a
+  // boundary (pi's compact() aborts the run and reconnects the agent while it
+  // summarizes), and clearing the flag there let a second compact() fire on top
+  // of the first. The one that loses appends nothing and rejects with "Already
+  // compacted". This counter is what before_agent_start consults so only a
+  // *stale* flag is dropped.
+  let outstanding = 0;
   // Set true after a compaction completes; the next turn_start with a known
   // usage reading measures whether it actually opened headroom (issue #68).
   let measurePending = false;
@@ -147,7 +205,7 @@ export default function (pi: ExtensionAPI) {
     // clears on usage recovery in turn_start, not on every turn boundary (the
     // auto-resume itself is a turn boundary, and clearing here would re-enable
     // the very loop we're guarding against).
-    compacting = false;
+    if (outstanding === 0) compacting = false;
   });
 
   pi.on("turn_start", async (_event, ctx) => {
@@ -189,9 +247,34 @@ export default function (pi: ExtensionAPI) {
 
     if (!shouldCompactNow(usage, pct, compacting)) return;
     compacting = true;
+    outstanding += 1;
     preCompactPercent = usage!.percent;
+
+    // Everything below runs after pi's compaction settles, when the session may
+    // already be gone: a stale `ctx.ui` or `pi.sendUserMessage()` throws, and
+    // pi calls these callbacks from a floating promise, so a throw is an
+    // unhandled rejection that kills the process (#108). Capture the UI handle
+    // now, while the ctx is known-good, and make every later use best-effort.
+    const ui = ctx.ui;
+    const notify = (message: string, level: "info" | "warning") => {
+      try {
+        ui.notify(message, level);
+      } catch {
+        // Session torn down (or replaced) while we were compacting: there is
+        // no longer a UI to notify, and that is not worth a crash.
+      }
+    };
+    const resumeRun = () => {
+      try {
+        pi.sendUserMessage(RESUME_MESSAGE);
+      } catch {
+        // Same: nothing left to resume. The user's next prompt starts a fresh
+        // turn on the compacted context either way.
+      }
+    };
+
     const windowK = Math.round((usage!.contextWindow / 1000) * 10) / 10;
-    ctx.ui.notify(
+    notify(
       `context at ${Math.round(usage!.percent!)}% of ${windowK}k — compacting mid-run to stay under the window`,
       "info",
     );
@@ -202,22 +285,44 @@ export default function (pi: ExtensionAPI) {
     // triggers a turn, driving the run forward on the freshly-compacted context.
     ctx.compact({
       onComplete: () => {
+        outstanding = Math.max(0, outstanding - 1);
+        compacting = false;
         measurePending = true;
-        pi.sendUserMessage(RESUME_MESSAGE);
-        compacting = false;
+        resumeRun();
       },
-      // "Nothing to compact" / cancelled etc.: pause rather than silently
-      // retrying. A repeated failed compaction is exactly the wedge in #68, so
-      // stop and tell the user; it re-arms when usage recovers (step 2).
       onError: (err?: { message?: string }) => {
+        outstanding = Math.max(0, outstanding - 1);
         compacting = false;
-        paused = true;
-        const why = err?.message ? ` (${err.message})` : "";
-        ctx.ui.notify(
-          `automatic compaction could not proceed${why} — paused to avoid a loop (issue #68). ` +
-            `Free space with /clear or use a larger-context model.`,
-          "warning",
-        );
+
+        switch (classifyCompactionError(err?.message)) {
+          // Someone else's compaction landed first (#91, #109). The context is
+          // compacted (only our call lost the race), so this is a success for
+          // every purpose except the return value: arm the #68 measurement and
+          // resume the run, exactly as onComplete would. Pausing here is what
+          // stranded the run at the prompt with a "could not proceed" warning.
+          case "already":
+            measurePending = true;
+            resumeRun();
+            return;
+          // Aborted run, or the session being disposed underneath us (#108).
+          // Nothing failed and nothing is stuck: leave the watchdog armed and
+          // say nothing. The next turn re-evaluates usage from scratch.
+          case "cancelled":
+            return;
+          // A real failure ("Nothing to compact (session too small)", a provider
+          // error): pause rather than silently retrying. A repeated failed
+          // compaction is exactly the wedge in #68, so stop and tell the user;
+          // it re-arms when usage recovers (step 2).
+          default: {
+            paused = true;
+            const why = err?.message ? ` (${err.message})` : "";
+            notify(
+              `automatic compaction could not proceed${why} — paused to avoid a loop (issue #68). ` +
+                `Free space with /clear or use a larger-context model.`,
+              "warning",
+            );
+          }
+        }
       },
     });
   });
