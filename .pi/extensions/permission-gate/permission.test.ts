@@ -95,12 +95,12 @@ describe("permission-gate tool_call interceptor", () => {
     return handler;
   }
 
-  function withMode<T>(mode: string | undefined, fn: () => T): T {
+  async function withMode<T>(mode: string | undefined, fn: () => T | Promise<T>): Promise<T> {
     const prev = process.env.LITTLE_CODER_PERMISSION_MODE;
     if (mode === undefined) delete process.env.LITTLE_CODER_PERMISSION_MODE;
     else process.env.LITTLE_CODER_PERMISSION_MODE = mode;
     try {
-      return fn();
+      return await fn();
     } finally {
       if (prev === undefined) delete process.env.LITTLE_CODER_PERMISSION_MODE;
       else process.env.LITTLE_CODER_PERMISSION_MODE = prev;
@@ -171,6 +171,48 @@ describe("permission-gate tool_call interceptor", () => {
         {},
       );
       expect(result).toBeUndefined();
+    });
+  });
+
+  it("manual mode prompts and allows when user confirms", async () => {
+    const handler = getHandler();
+    await withMode("manual", async () => {
+      const result = await handler(
+        { toolName: "bash", input: { command: "rm -rf /" } },
+        { ui: { confirm: async () => true } },
+      );
+      expect(result).toBeUndefined();
+    });
+  });
+
+  it("manual mode prompts and blocks when user declines", async () => {
+    const handler = getHandler();
+    await withMode("manual", async () => {
+      const result = await handler(
+        { toolName: "bash", input: { command: "rm -rf /" } },
+        { ui: { confirm: async () => false } },
+      );
+      expect(result?.block).toBe(true);
+      expect(result.reason).toBe("command cancelled by user");
+    });
+  });
+
+  it("manual mode prompts for whitelisted commands too", async () => {
+    const handler = getHandler();
+    let promptShown = false;
+    await withMode("manual", async () => {
+      await handler(
+        { toolName: "bash", input: { command: "git status" } },
+        {
+          ui: {
+            confirm: async () => {
+              promptShown = true;
+              return true;
+            },
+          },
+        },
+      );
+      expect(promptShown).toBe(true);
     });
   });
 });
