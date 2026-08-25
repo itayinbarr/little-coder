@@ -295,6 +295,8 @@ export function contextWindowFromModelList(json: unknown, modelId?: string): num
 }
 
 /** Probe the router's /v1/models for the live context window of one model.
+ *  The key is sent even though llama.cpp leaves this endpoint open — a
+ *  self-hosted reverse proxy in front may still require it.
  *  Same best-effort contract as probeContextWindow: never throws. */
 export async function probeContextWindowViaModels(
   baseUrl: string,
