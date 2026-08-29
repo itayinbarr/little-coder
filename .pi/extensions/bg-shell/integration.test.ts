@@ -236,6 +236,21 @@ describe("session replacement cleanup", () => {
     expect(replacementSetWidget).toHaveBeenCalledTimes(replacementCallsBeforeClose);
   }, T);
 
+  it("ignores output emitted after a job is reaped", async () => {
+    const { sent, handlers, call } = wire();
+    const id = textOf(await call("ShellStart", {
+      command: "trap 'echo Traceback-after-reap; exit 0' TERM; echo ready; while :; do sleep 1; done",
+      label: "late-output",
+      wake_on: { exit: false, match: ["Traceback-after-reap"] },
+    })).match(/as (job\d+)/)![1];
+    expect(await until(async () => textOf(await call("ShellLog", { id })).includes("ready"))).toBe(true);
+
+    await handlers.session_shutdown({});
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(sent).toEqual([]);
+  }, T);
+
   it("does not force-kill a reaped job after it has exited", async () => {
     const kill = vi.spyOn(process, "kill");
     try {

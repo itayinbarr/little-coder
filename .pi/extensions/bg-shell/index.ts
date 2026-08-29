@@ -170,7 +170,7 @@ function handleLine(pi: ExtensionAPI, job: Job, line: string): void {
   if (job.pendingWake) clearTimeout(job.pendingWake);
   job.pendingWake = setTimeout(() => {
     job.pendingWake = undefined;
-    if (job.exited) return; // exit wake already covered it
+    if (job.exited || !jobs.has(job.id)) return;
     deliverWake(pi, job, event, Date.now());
   }, EXIT_COALESCE_MS);
   (job.pendingWake as any).unref?.();
@@ -178,6 +178,7 @@ function handleLine(pi: ExtensionAPI, job: Job, line: string): void {
 
 function attachStreams(pi: ExtensionAPI, job: Job): void {
   const onChunk = (buf: Buffer) => {
+    if (job.exited || !jobs.has(job.id)) return;
     const text = job.pending + buf.toString();
     const parts = text.split("\n");
     job.pending = parts.pop() ?? "";
