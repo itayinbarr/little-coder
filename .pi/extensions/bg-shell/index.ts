@@ -81,9 +81,12 @@ function runningJobs(): Job[] {
 function setIndicator(ctx?: any): void {
   const target = ctx ?? uiCtx;
   if (ctx) uiCtx = ctx;
-  if (!target?.hasUI) return;
-  const live = runningJobs();
   try {
+    // hasUI throws on a stale ctx (after /new, fork, switch, reload). It must
+    // be read *inside* the try: reading it outside turned a child-process
+    // close event into an uncaughtException that killed the whole agent.
+    if (!target?.hasUI) return;
+    const live = runningJobs();
     if (live.length === 0) {
       target.ui.setWidget(INDICATOR_KEY, undefined, { placement: "belowEditor" });
       return;
@@ -185,9 +188,14 @@ function attachStreams(pi: ExtensionAPI, job: Job): void {
 
   const finish = (code: number | null) => {
     if (job.exited) return;
+    // Record the real exit before checking jobs: killJob's delayed SIGKILL
+    // reads this flag even after reapAll has removed the job from the map.
     job.exited = true;
     job.exitCode = code;
     job.endedAt = Date.now();
+    // Process events can outlive reapAll because SIGTERM is asynchronous.
+    // Do not let an old job repaint or wake a replacement session.
+    if (!jobs.has(job.id)) return;
     if (job.pending) {
       handleLine(pi, job, job.pending);
       job.pending = "";
@@ -267,6 +275,8 @@ export function reapAll(): void {
     if (!job.exited) killJob(job);
   }
   jobs.clear();
+  // Any captured ctx dies with the session; the next session_start re-captures.
+  uiCtx = null;
   if (stallTimer) {
     clearInterval(stallTimer);
     stallTimer = null;
