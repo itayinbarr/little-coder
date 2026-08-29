@@ -4,7 +4,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   formatContextWindow,
   loadProviders,
-  probeContextWindow,
+  probeContextWindowAuto,
+  resolveApiKey,
   windowChange,
   withContextWindow,
   type ProviderModelEntry,
@@ -42,9 +43,10 @@ export default async function (pi: ExtensionAPI) {
 
   // Opt-out for offline / CI / no-server launches that don't want a startup probe.
   const probeDisabled = process.env.LITTLE_CODER_NO_CTX_PROBE === "1";
-  const probeOpts = () => ({
+  const probeOpts = (apiKey?: string) => ({
     url: process.env.LITTLE_CODER_LLAMACPP_PROPS_URL || undefined,
     timeoutMs: Number(process.env.LITTLE_CODER_CTX_PROBE_TIMEOUT_MS) || undefined,
+    apiKey, // /props is behind --api-key auth; without it the probe 401s
   });
 
   // Captured so the model_select hook below can re-register llamacpp with a new
@@ -59,10 +61,14 @@ export default async function (pi: ExtensionAPI) {
     // Auto-detect the server's live context window so the model registers with
     // the real n_ctx (e.g. a `-c 131072` server) instead of models.json's
     // declared default — the TUI readout, read-guard, and context budget all
-    // follow the registered window. llama.cpp-only (the /props endpoint); any
-    // failure silently keeps the declared window, so this never breaks startup.
+    // follow the registered window. Direct llama.cpp answers /props; a
+    // llama-swap router answers /v1/models per-model instead. Any failure
+    // silently keeps the declared window, so this never breaks startup.
     if (!probeDisabled && name === "llamacpp" && entry.models.length > 0) {
-      const probed = await probeContextWindow(entry.baseUrl, probeOpts());
+      const probed = await probeContextWindowAuto(entry.baseUrl, {
+        ...probeOpts(resolveApiKey(entry.apiKey)),
+        modelId: entry.models[0]?.id, // router mode: match this id in /v1/models
+      });
       if (probed) {
         models = withContextWindow(entry.models, probed);
       }
@@ -103,7 +109,10 @@ export default async function (pi: ExtensionAPI) {
       const previous = (event as any).previousModel;
       if (!model || model.provider !== "llamacpp" || !previous) return;
 
-      const probed = await probeContextWindow(lc.baseUrl, probeOpts());
+      const probed = await probeContextWindowAuto(lc.baseUrl, {
+        ...probeOpts(resolveApiKey(lc.apiKey)),
+        modelId: model.id,
+      });
       const change = windowChange(lc.registeredCtx, probed);
       if (!change) return;
 
