@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import setupBgShell, { reapAll } from "./index.ts";
 
@@ -12,7 +12,7 @@ interface Sent {
   delivery: any;
 }
 
-function wire() {
+function wire(ctx: any = { hasUI: false, ui: {} }) {
   const sent: Sent[] = [];
   const tools: Record<string, any> = {};
   const handlers: Record<string, any> = {};
@@ -22,7 +22,6 @@ function wire() {
     sendMessage: (msg: any, delivery: any) => { sent.push({ content: msg.content, delivery }); },
   };
   setupBgShell(pi);
-  const ctx = { hasUI: false, ui: {} };
   const call = (name: string, params: any) =>
     tools[name].execute("id", params, undefined, undefined, ctx);
   return { sent, tools, handlers, call };
@@ -196,6 +195,99 @@ describe("bg-shell against real processes", () => {
       expect(textOf(r)).toContain("no such job");
     }
   }, T);
+});
+
+describe("session replacement cleanup", () => {
+  const T = 20_000;
+
+  it("contains stale-context errors while checking hasUI", async () => {
+    const { handlers } = wire();
+    const safeCtx = { hasUI: false, ui: {} };
+    const staleCtx = {
+      get hasUI() {
+        throw new Error("This extension ctx is stale after session replacement or reload.");
+      },
+      ui: {},
+    };
+
+    try {
+      await expect(handlers.session_start({}, staleCtx)).resolves.toBeUndefined();
+    } finally {
+      await handlers.session_start({}, safeCtx);
+    }
+  });
+
+  it("does not update the replacement UI or send a wake when a reaped job closes", async () => {
+    const replacementSetWidget = vi.fn();
+    const { sent, handlers, call } = wire({ hasUI: true, ui: { setWidget: vi.fn() } });
+    const started = textOf(await call("ShellStart", {
+      command: "sleep 300",
+      label: "reaped",
+    }));
+    const pid = Number(started.match(/\(pid (\d+)\)/)![1]);
+
+    await handlers.session_shutdown({});
+    await handlers.session_start({}, { hasUI: true, ui: { setWidget: replacementSetWidget } });
+    const replacementCallsBeforeClose = replacementSetWidget.mock.calls.length;
+    expect(replacementCallsBeforeClose).toBe(1);
+    expect(await until(() => !pidAlive(pid), 8000)).toBe(true);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(sent).toEqual([]);
+    expect(replacementSetWidget).toHaveBeenCalledTimes(replacementCallsBeforeClose);
+  }, T);
+
+  it("ignores output emitted after a job is reaped", async () => {
+    const { sent, handlers, call } = wire();
+    const id = textOf(await call("ShellStart", {
+      command: "trap 'echo Traceback-after-reap; exit 0' TERM; echo ready; while :; do sleep 1; done",
+      label: "late-output",
+      wake_on: { exit: false, match: ["Traceback-after-reap"] },
+    })).match(/as (job\d+)/)![1];
+    expect(await until(async () => textOf(await call("ShellLog", { id })).includes("ready"))).toBe(true);
+
+    await handlers.session_shutdown({});
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(sent).toEqual([]);
+  }, T);
+
+  it("does not force-kill a reaped job after it has exited", async () => {
+    const kill = vi.spyOn(process, "kill");
+    try {
+      const { handlers, call } = wire();
+      const started = textOf(await call("ShellStart", {
+        command: "sleep 300",
+        label: "reaped",
+      }));
+      const pid = Number(started.match(/\(pid (\d+)\)/)![1]);
+
+      await handlers.session_shutdown({});
+      expect(await until(() => !pidAlive(pid), 8000)).toBe(true);
+      await new Promise((r) => setTimeout(r, 4200));
+
+      expect(kill).not.toHaveBeenCalledWith(-pid, "SIGKILL");
+    } finally {
+      kill.mockRestore();
+    }
+  }, T);
+
+  it("drops the cached UI context during session shutdown", async () => {
+    let hasUIReads = 0;
+    const ctx = {
+      get hasUI() {
+        hasUIReads += 1;
+        return false;
+      },
+      ui: {},
+    };
+    const { handlers } = wire(ctx);
+
+    await handlers.session_start({}, ctx);
+    const readsBeforeShutdown = hasUIReads;
+    await handlers.session_shutdown({});
+
+    expect(hasUIReads).toBe(readsBeforeShutdown);
+  });
 });
 
 describe("the parent watchdog", () => {
