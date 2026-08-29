@@ -3,6 +3,7 @@ import setupWatchdog, {
   thresholdPercent,
   shouldCompactNow,
   compactionHelped,
+  canCompactMidRun,
   classifyCompactionError,
   MIN_PROGRESS_PCT,
   RESUME_MESSAGE,
@@ -89,6 +90,7 @@ describe("shouldCompactNow", () => {
 
       let capturedOpts: any;
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 52000, contextWindow: 64000, percent: 81 }),
         ui: { notify: vi.fn() },
         compact: (opts: any) => { capturedOpts = opts; },
@@ -104,7 +106,7 @@ describe("shouldCompactNow", () => {
       // Simulate pi finishing the compaction (agent reconnected + idle).
       capturedOpts.onComplete();
       expect(sendUserMessage).toHaveBeenCalledTimes(1);
-      expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE);
+      expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE, { deliverAs: "followUp" });
     } finally {
       if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
       else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
@@ -125,6 +127,7 @@ describe("shouldCompactNow", () => {
       let percent = 81;
       const compact = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 52000, contextWindow: 64000, percent }),
         ui: { notify: vi.fn() },
         compact,
@@ -164,6 +167,7 @@ describe("shouldCompactNow", () => {
       const compact = vi.fn();
       const notify = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent }),
         ui: { notify },
         compact,
@@ -209,6 +213,7 @@ describe("shouldCompactNow", () => {
       const compact = vi.fn();
       const notify = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
         ui: { notify },
         compact,
@@ -231,6 +236,77 @@ describe("shouldCompactNow", () => {
       if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
       else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
     }
+  });
+
+  describe("canCompactMidRun", () => {
+    it("is true only for the TUI", () => {
+      expect(canCompactMidRun("tui")).toBe(true);
+      expect(canCompactMidRun("print")).toBe(false);
+      expect(canCompactMidRun("json")).toBe(false);
+      expect(canCompactMidRun("rpc")).toBe(false);
+      expect(canCompactMidRun(undefined)).toBe(false);
+    });
+  });
+
+  it("#115: headless never fires the mid-run compaction that aborts the run", async () => {
+    const env = process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+    process.env.LITTLE_CODER_COMPACT_AT_PERCENT = "80";
+    try {
+      for (const mode of ["print", "json", "rpc"]) {
+        const handlers: Record<string, Function> = {};
+        const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage: vi.fn() };
+        setupWatchdog(pi as any);
+
+        const compact = vi.fn();
+        const ctx = {
+          mode,
+          getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
+          ui: { notify: vi.fn() },
+          compact,
+        };
+
+        // Well over threshold, and in the TUI this fires. Under -p, compact()
+        // aborts the run print-mode is awaiting and the answer is lost.
+        await handlers.turn_start({}, ctx);
+        expect(compact, `mode=${mode}`).not.toHaveBeenCalled();
+      }
+    } finally {
+      if (env === undefined) delete process.env.LITTLE_CODER_COMPACT_AT_PERCENT;
+      else process.env.LITTLE_CODER_COMPACT_AT_PERCENT = env;
+    }
+  });
+
+  it("#115: headless queues a continuation when pi compacts on its own", async () => {
+    const handlers: Record<string, Function> = {};
+    const sendUserMessage = vi.fn();
+    const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+    setupWatchdog(pi as any);
+
+    // pi's threshold compaction ends with `return this.agent.hasQueuedMessages()`,
+    // which the caller turns into agent.continue(). The queued message is the
+    // only thing that keeps a headless run alive across a compaction.
+    await handlers.session_compact({ reason: "threshold", willRetry: false }, { mode: "print" });
+    expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE, { deliverAs: "followUp" });
+  });
+
+  it("#115: does not queue on overflow recovery (pi retries that turn itself)", async () => {
+    const handlers: Record<string, Function> = {};
+    const sendUserMessage = vi.fn();
+    const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+    setupWatchdog(pi as any);
+
+    await handlers.session_compact({ reason: "overflow", willRetry: true }, { mode: "print" });
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("#115: the TUI does not double-resume (its own callback already does)", async () => {
+    const handlers: Record<string, Function> = {};
+    const sendUserMessage = vi.fn();
+    const pi = { on: (e: string, h: Function) => { handlers[e] = h; }, sendUserMessage };
+    setupWatchdog(pi as any);
+
+    await handlers.session_compact({ reason: "threshold", willRetry: false }, { mode: "tui" });
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
   describe("classifyCompactionError", () => {
@@ -264,6 +340,7 @@ describe("shouldCompactNow", () => {
       const compact = vi.fn();
       const notify = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 56000, contextWindow: 64000, percent }),
         ui: { notify },
         compact,
@@ -276,7 +353,7 @@ describe("shouldCompactNow", () => {
       // the run halted here and had to be restarted by typing "resume".
       compact.mock.calls[0][0].onError(new Error("Already compacted"));
 
-      expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE);
+      expect(sendUserMessage).toHaveBeenCalledWith(RESUME_MESSAGE, { deliverAs: "followUp" });
       expect(notify).not.toHaveBeenCalledWith(
         expect.stringContaining("could not proceed"),
         "warning",
@@ -314,6 +391,7 @@ describe("shouldCompactNow", () => {
 
       const compact = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
         get ui() { if (!live) stale(); return { notify }; },
         compact,
@@ -347,6 +425,7 @@ describe("shouldCompactNow", () => {
       const compact = vi.fn();
       const notify = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 59000, contextWindow: 64000, percent: 92 }),
         ui: { notify },
         compact,
@@ -378,6 +457,7 @@ describe("shouldCompactNow", () => {
 
       const compact = vi.fn();
       const ctx = {
+        mode: "tui",
         getContextUsage: () => ({ tokens: 56000, contextWindow: 64000, percent: 88 }),
         ui: { notify: vi.fn() },
         compact,

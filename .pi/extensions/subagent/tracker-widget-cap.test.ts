@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { SubCoderTracker } from "./tracker.ts";
 
 // pi slices a string-array widget to MAX_WIDGET_LINES (10) and appends
@@ -93,5 +93,37 @@ describe("sub-coder tracker stays inside pi's widget cap", () => {
     const text = get().map(stripAnsi).join("\n");
     expect(get().length).toBe(5); // header + 4 rows
     expect(text).not.toContain("earlier sub-coders");
+  });
+});
+
+describe("stale context (the #108 / #119 shape)", () => {
+  const STALE = () => {
+    throw new Error("This extension ctx is stale after session replacement or reload.");
+  };
+
+  // A tracker outlives the session whenever a dispatch is in flight and the
+  // session is replaced under it: /new, /clear, or /implement since v1.18.0.
+  // Its animation timer and its `end()` in the tool's finally both touch the
+  // captured ctx, and every accessor on an invalidated ctx throws.
+  const deadCtx = {
+    get hasUI(): boolean { return STALE(); },
+    get ui(): any { return STALE(); },
+  };
+
+  it("begin/update/end are all no-ops on a disposed session instead of throwing", () => {
+    const t = new SubCoderTracker(deadCtx as any);
+    expect(() => t.begin([{ id: "1", label: "a" }])).not.toThrow();
+    expect(() => t.update([
+      { id: "1", label: "a", exitCode: -1, report: "", errorMessage: "", usage: undefined } as any,
+    ])).not.toThrow();
+    expect(() => t.end()).not.toThrow();
+  });
+
+  it("still paints while the session is alive", () => {
+    const setWidget = vi.fn();
+    const t = new SubCoderTracker({ hasUI: true, ui: { setWidget } } as any);
+    t.begin([{ id: "1", label: "a" }]);
+    expect(setWidget).toHaveBeenCalled();
+    t.end();
   });
 });

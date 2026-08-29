@@ -5,6 +5,7 @@ import {
   formatContextWindow,
   loadProviders,
   probeContextWindowAuto,
+  probeServedModels,
   resolveApiKey,
   windowChange,
   withContextWindow,
@@ -72,6 +73,19 @@ export default async function (pi: ExtensionAPI) {
       if (probed) {
         models = withContextWindow(entry.models, probed);
       }
+
+      // Router mode also serves models that models.json has never heard of, and
+      // selecting one failed with "model not found" because it was never
+      // registered (issue #112). Discovery only ADDS ids the endpoint really
+      // serves, and only when it lists more than one -- a single-model server is
+      // the ordinary local case where models.json's alias is the better name.
+      const discovered = await probeServedModels(
+        entry.baseUrl,
+        models,
+        models[0]?.contextWindow ?? 32768,
+        probeOpts(resolveApiKey(entry.apiKey)),
+      );
+      if (discovered.length > 0) models = [...models, ...discovered];
     }
 
     pi.registerProvider(name, {

@@ -8,6 +8,7 @@
 
 import { summarizeActivity, type SubCoderResult } from "./spawn.ts";
 import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
+import { hasLiveUI, tryCtx } from "../_shared/safe-ctx.ts";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -70,7 +71,7 @@ export class SubCoderTracker {
 
   /** Register the items and start the animation timer. */
   begin(items: { id: string; label: string }[]): void {
-    if (!this.ctx.hasUI || items.length === 0) return;
+    if (!hasLiveUI(this.ctx) || items.length === 0) return;
     const now = Date.now();
     for (const it of items) {
       if (!this.startedAt.has(it.id)) {
@@ -94,7 +95,7 @@ export class SubCoderTracker {
 
   /** Feed a fresh snapshot of all results (from runSubCodersConcurrent). */
   update(results: SubCoderResult[]): void {
-    if (!this.ctx.hasUI) return;
+    if (!hasLiveUI(this.ctx)) return;
     const now = Date.now();
     for (const r of results) {
       if (!this.startedAt.has(r.id)) {
@@ -112,13 +113,13 @@ export class SubCoderTracker {
       clearInterval(this.timer);
       this.timer = null;
     }
-    if (!this.ctx.hasUI) return;
+    if (!hasLiveUI(this.ctx)) return;
     this.render();
-    this.ctx.ui.setWidget(this.key, undefined, { placement: this.placement });
+    tryCtx(() => this.ctx.ui.setWidget(this.key, undefined, { placement: this.placement }), undefined);
   }
 
   private render(): void {
-    if (!this.ctx.hasUI || this.order.length === 0) return;
+    if (!hasLiveUI(this.ctx) || this.order.length === 0) return;
     const now = Date.now();
     const frame = SPINNER[Math.floor(now / 100) % SPINNER.length];
 
@@ -169,6 +170,6 @@ export class SubCoderTracker {
     const frameKey = lines.join("\n");
     if (frameKey === this.lastFrame) return; // diff-guard: skip identical repaints
     this.lastFrame = frameKey;
-    this.ctx.ui.setWidget(this.key, lines, { placement: this.placement });
+    tryCtx(() => this.ctx.ui.setWidget(this.key, lines, { placement: this.placement }), undefined);
   }
 }

@@ -30,6 +30,9 @@ let loaded = false;
 // signals by the time the next `before_agent_start` fires.
 const recentToolCalls: string[] = []; // most-recent-first, capped at 8
 let lastFailedTool: string | null = null;
+// Set by `/skills <tool>`: forces that card into the next selection ahead of
+// every automatic signal. Cleared by `/skills off` (issue #118).
+let pinnedSkill: string | null = null;
 
 // ── Intent keywords → likely tools ──────────────────────────────────────
 const INTENT_MAP: Record<string, string[]> = {
@@ -127,6 +130,42 @@ function lookupSkill(name: string): ToolSkill | undefined {
   return undefined;
 }
 
+/** One line per loaded card, for `/skills`. Sorted, so the output is stable. */
+export function skillInventory(): { tool: string; tokens: number; pinned: boolean }[] {
+  loadSkills();
+  return [...skills.entries()]
+    .map(([tool, sk]) => ({ tool, tokens: sk.tokenCost, pinned: tool === pinnedSkill }))
+    .sort((a, b) => a.tool.localeCompare(b.tool));
+}
+
+/** Resolve `/skills <arg>` to the new pin. Returns the message to show.
+ *  Pure apart from the pin itself, so the argument handling is testable. */
+export function applySkillsCommand(arg: string): string {
+  const name = arg.trim();
+  if (!name) {
+    const rows = skillInventory();
+    if (rows.length === 0) return "no tool skill cards are loaded";
+    return [
+      `${rows.length} tool skill cards loaded (selected automatically per turn):`,
+      ...rows.map((r) => `  ${r.pinned ? "*" : " "} ${r.tool}  ~${r.tokens} tok`),
+      pinnedSkill
+        ? `pinned: ${pinnedSkill} (clear with /skills off)`
+        : "pin one with /skills <tool>, clear with /skills off",
+    ].join("\n");
+  }
+  if (name === "off" || name === "none" || name === "clear") {
+    pinnedSkill = null;
+    return "skill pin cleared; selection is automatic again";
+  }
+  const sk = lookupSkill(name);
+  if (!sk) {
+    const known = skillInventory().map((r) => r.tool).join(", ");
+    return `no skill card for "${name}". Loaded: ${known || "(none)"}`;
+  }
+  pinnedSkill = sk.targetTool;
+  return `pinned the ${sk.targetTool} skill card (~${sk.tokenCost} tok); it is injected every turn until /skills off`;
+}
+
 function selectSkills(prompt: string, budget: number, allowed?: Set<string>): ToolSkill[] {
   const selected: ToolSkill[] = [];
   let used = 0;
@@ -138,6 +177,11 @@ function selectSkills(prompt: string, budget: number, allowed?: Set<string>): To
     selected.push(sk);
     used += sk.tokenCost;
   };
+
+  // 0. An explicit pin from `/skills <tool>` outranks every automatic signal.
+  //    That is the whole point of pinning: the user has already seen the
+  //    selector pick the wrong card and is overriding it (issue #118).
+  if (pinnedSkill) tryAdd(pinnedSkill);
 
   // 1. Error recovery — last failed tool
   if (lastFailedTool) tryAdd(lastFailedTool);
@@ -243,6 +287,19 @@ function researchDirective(allowed: Set<string> | undefined): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // `/skills` (issue #118). pi's own `/skill:name` addresses pi skills; these
+  // cards are a different mechanism (selected per turn by error-recovery >
+  // recency > intent and injected at the conversation tail), so pi's command
+  // cannot see them. This lists what is loaded, and pins one when the selector
+  // keeps choosing a different card than the one you want.
+  pi.registerCommand("skills", {
+    description: "List loaded tool skill cards; /skills <tool> pins one, /skills off clears it",
+    handler: async (args: string, ctx: any) => {
+      const message = applySkillsCommand(args ?? "");
+      ctx.ui?.notify?.(message, "info");
+    },
+  });
+
   const shouldInject = makeDedupe();
 
   // Track tool usage across the whole session so recency + error-recovery

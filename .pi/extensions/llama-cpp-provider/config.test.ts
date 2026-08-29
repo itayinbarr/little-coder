@@ -11,6 +11,7 @@ import {
   resolveOverridePath,
   propsUrlFor,
   contextWindowFromModelList,
+  discoveredModels,
   contextWindowFromProps,
   probeContextWindow,
   probeContextWindowViaModels,
@@ -516,5 +517,46 @@ describe("windowChange", () => {
   });
   it("surfaces a first-known window even when nothing was registered yet", () => {
     expect(windowChange(undefined, 32768)).toEqual({ from: undefined, to: 32768 });
+  });
+});
+
+describe("discoveredModels (router mode, issue #112)", () => {
+  const declared = [{ id: "qwen3.6-35b-a3b" }];
+  const router = {
+    data: [
+      { id: "LFM2.5-8B-A1B-GGUF", meta: { n_ctx: 65536 } },
+      { id: "qwen-coder", status: { value: "unloaded", args: ["llama-server", "--ctx-size", "200000"] } },
+      { id: "qwen3.6-35b-a3b", meta: { n_ctx: 131072 } },
+    ],
+  };
+
+  it("adds the served ids models.json has never heard of", () => {
+    const got = discoveredModels(router, declared, 32768);
+    expect(got.map((m) => m.id)).toEqual(["LFM2.5-8B-A1B-GGUF", "qwen-coder"]);
+  });
+
+  it("takes each model's own window, falling back when it has none", () => {
+    const got = discoveredModels(router, declared, 32768);
+    expect(got[0].contextWindow).toBe(65536);   // meta.n_ctx
+    expect(got[1].contextWindow).toBe(200000);  // --ctx-size, unloaded
+    expect(discoveredModels({ data: [{ id: "a" }, { id: "b" }] }, [], 32768)[0].contextWindow).toBe(32768);
+  });
+
+  it("never shadows a declared id", () => {
+    expect(discoveredModels(router, declared, 32768).some((m) => m.id === "qwen3.6-35b-a3b")).toBe(false);
+  });
+
+  it("stays out of the way of an ordinary single-model server", () => {
+    // The common local case: one model, whose raw served id differs from the
+    // friendly models.json alias. Registering both would be duplicate noise.
+    expect(discoveredModels({ data: [{ id: "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf", meta: { n_ctx: 131072 } }] }, declared, 32768)).toEqual([]);
+    expect(discoveredModels({ data: [] }, declared, 32768)).toEqual([]);
+    expect(discoveredModels(null, declared, 32768)).toEqual([]);
+  });
+
+  it("shapes a discovered model like a declared one", () => {
+    const m = discoveredModels(router, declared, 32768)[0];
+    expect(m).toMatchObject({ name: "LFM2.5-8B-A1B-GGUF", reasoning: false, input: ["text"], maxTokens: 4096 });
+    expect(m.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   });
 });

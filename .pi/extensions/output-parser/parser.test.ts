@@ -98,11 +98,33 @@ describe("parseTextToolCalls", () => {
     expect(calls.length).toBe(1);
     expect(calls[0].name).toBe("Glob");
   });
-  it("does not extract from nested-object bare JSON (matches Python behavior)", () => {
-    const text = 'the model said: {"name":"Glob","input":{"pattern":"**/*.py"}}';
+  it("#117: extracts a bare call whose arguments are a nested object", () => {
+    // The old flat regex `\{[^{}]*"name"...[^{}]*\}` excluded braces, so it
+    // could not match the shape a model actually writes. The call was not
+    // recognised as an attempted call at all, so the "re-issue this natively"
+    // nudge never fired and the run ended having executed nothing.
+    for (const key of ["input", "parameters", "arguments", "args"]) {
+      const text = `the model said: {"name":"Glob","${key}":{"pattern":"**/*.py"}}`;
+      const calls = parseTextToolCalls(text);
+      expect(calls.length, key).toBe(1);
+      expect(calls[0].name).toBe("Glob");
+      expect(calls[0].input).toEqual({ pattern: "**/*.py" });
+    }
+  });
+
+  it("#117: reads an OpenAI-style arguments string", () => {
+    const text = 'text {"name":"read","arguments":"{\\"path\\": \\"/a.py\\"}"}';
     const calls = parseTextToolCalls(text);
-    // Inner object doesn't have "name", outer doesn't match the flat regex
-    expect(calls).toEqual([]);
+    expect(calls.length).toBe(1);
+    expect(calls[0].input).toEqual({ path: "/a.py" });
+  });
+
+  it("#117/#96: a nested object with no argument key is NOT a tool call", () => {
+    // Guards the false-positive direction: prose containing JSON that merely
+    // has a `name` field must not be read as a call just because balanced
+    // matching can now see it.
+    const text = 'the config looks like {"name":"my-app","scripts":{"build":"tsc"}}';
+    expect(parseTextToolCalls(text)).toEqual([]);
   });
   it("repairs trailing comma inside fenced block", () => {
     const text = '```tool\n{"name":"Read","input":{"file_path":"/x"},}\n```';

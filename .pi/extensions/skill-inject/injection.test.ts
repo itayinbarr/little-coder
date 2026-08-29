@@ -15,6 +15,7 @@ function handlerFor(setup: (pi: any) => void): Handler {
     on(name: string, h: Handler) {
       if (name === "before_agent_start") handler = h;
     },
+    registerCommand: () => {},
   });
   if (!handler) throw new Error("extension registered no before_agent_start handler");
   return handler;
@@ -23,7 +24,10 @@ function handlerFor(setup: (pi: any) => void): Handler {
 /** Every handler an extension registers, so a test can drive tool_result too. */
 function handlersFor(setup: (pi: any) => void): Record<string, Handler> {
   const handlers: Record<string, Handler> = {};
-  setup({ on: (name: string, h: Handler) => { handlers[name] = h; } });
+  setup({
+    on: (name: string, h: Handler) => { handlers[name] = h; },
+    registerCommand: () => {},
+  });
   return handlers;
 }
 

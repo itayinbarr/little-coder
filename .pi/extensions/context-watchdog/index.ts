@@ -83,6 +83,45 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 // Nothing the watchdog reports is worth a crash: the UI handle is captured while
 // the ctx is known-good and every post-compaction use of it is best-effort.
 
+// ── Headless cannot survive a mid-run compaction (issue #115) ──────────────
+// Or1j1n found the half of #108 that stopping the crash did not fix. Under
+// `-p` the same long task that succeeds in the TUI exits `Request aborted`
+// with code 1 and empty stdout, because pi's `compact()` is the *manual* path
+// and its first act is to abort the in-flight run:
+//
+//   async compact() { this._disconnectFromAgent(); await this.abort(); ... }
+//
+// print-mode then reads the run's verdict off the last message and skips
+// printing the answer:
+//
+//   if (stopReason === "error" || stopReason === "aborted") {
+//     console.error(errorMessage || `Request ${stopReason}`); exitCode = 1;
+//   }
+//
+// There is no way to call compact() safely from inside a headless run. pi holds
+// `_isAgentRunActive` true for the whole of `_runAgentPrompt` and only clears it
+// in `_emitAgentSettled`, so `abort() -> waitForIdle()` cannot resolve while the
+// run is still on the stack. Calling it from `turn_start` aborts the run;
+// calling it from `agent_end` deadlocks instead (measured: a run hung past 400s
+// before the approach was abandoned).
+//
+// pi's OWN threshold compaction has neither problem: it runs inside
+// `_handlePostAgentRun`, where a compaction is expected, and it ends with
+//
+//   // Auto-compaction can complete while follow-up/steering/custom messages are waiting.
+//   // Continue once so queued messages are delivered.
+//   return this.agent.hasQueuedMessages();
+//
+// which the caller turns into `agent.continue()`. So headless does not need us
+// to compact. It needs a *queued continuation* at the moment pi compacts, which
+// is what the `session_compact` handler below provides. The mid-run path stays
+// TUI-only, which is where it works and where #59 needed it.
+//
+// What headless gives up is our threshold: pi decides when to compact there,
+// and a run that blows the window without ever reaching a boundary still falls
+// to pi's own overflow recovery, which handles it once per user message. Both
+// are real limits, and both are better than losing the run outright.
+
 export interface ContextUsageLike {
   tokens: number | null;
   contextWindow: number;
@@ -136,6 +175,14 @@ export function classifyCompactionError(message?: string): CompactionOutcome {
   if (m.includes("already compacted")) return "already";
   if (m.includes("cancel") || m.includes("abort")) return "cancelled";
   return "failed";
+}
+
+// Whether this session can survive `ctx.compact()` mid-run. Only the TUI can:
+// every other mode drives the agent through one `session.prompt()` call whose
+// result IS the process output, and compact() aborts that run (#115). pi
+// reports "tui" for interactive, "print"/"json" for `-p`, and "rpc".
+export function canCompactMidRun(mode: unknown): boolean {
+  return mode === "tui";
 }
 
 // Pure decision: should we kick off compaction on this turn? True only when the
@@ -246,9 +293,70 @@ export default function (pi: ExtensionAPI) {
     if (paused) return;
 
     if (!shouldCompactNow(usage, pct, compacting)) return;
+    // Headless drives the whole run through one session.prompt() whose result is
+    // the process output, and compact() aborts that run (#115). Those modes
+    // compact from agent_end instead, below.
+    if (!canCompactMidRun(ctx.mode)) return;
+    // Deliberately NOT awaited. compact() calls abort(), which waits for the
+    // agent to go idle, and the agent is waiting on this very handler: awaiting
+    // here deadlocks. The TUI does not need the result inline anyway, because
+    // the resume message drives the next turn once compaction settles.
+    void fire(ctx, usage!);
+  });
+
+  // Headless compaction point (#115). The agent has yielded, so compact() has
+  // nothing to abort, and a message queued here is turned into an
+  // agent.continue() by pi's own _handlePostAgentRun -- the run resumes inside
+  // print-mode's await instead of the process exiting on an aborted message.
+  // Headless continuation (#115). We cannot compact from inside a headless run
+  // at all: pi keeps `_isAgentRunActive` true for the whole of `_runAgentPrompt`
+  // (it is cleared in `_emitAgentSettled`, in the finally), so `ctx.compact()`
+  // either aborts the run we are trying to save or, from `agent_end`, hangs
+  // forever in `abort() -> waitForIdle()` waiting on the run that is waiting on
+  // us. Both were measured, not reasoned about: the abort exits `Request
+  // aborted`, the agent_end variant hung a run past 400s.
+  //
+  // pi's OWN threshold compaction has neither problem, because it runs inside
+  // `_handlePostAgentRun` where a compaction is expected, and it finishes with:
+  //
+  //   // Auto-compaction can complete while follow-up/steering/custom messages are waiting.
+  //   // Continue once so queued messages are delivered.
+  //   return this.agent.hasQueuedMessages();
+  //
+  // which `while (await this._handlePostAgentRun()) await this.agent.continue()`
+  // turns into a continuation of the same run. So the only thing headless needs
+  // from this extension is a queued message at that moment. `session_compact` is
+  // emitted (and awaited) immediately before that return, which is exactly the
+  // right seam.
+  pi.on("session_compact", async (event, ctx) => {
+    // The TUI resumes from its own compaction callback; queueing here too would
+    // send the model two continuations for one compaction.
+    if (canCompactMidRun(ctx.mode)) return;
+    // Overflow recovery already returns true and retries the aborted turn by
+    // itself. A queued message on top of that re-runs work pi is re-running.
+    if ((event as { willRetry?: boolean }).willRetry) return;
+    queueResume();
+  });
+
+  // Ask pi to continue the task after a compaction. Queues rather than prompts
+  // whenever the agent is still streaming; see #114 for why the deliverAs is
+  // not optional.
+  function queueResume(): void {
+    try {
+      pi.sendUserMessage(RESUME_MESSAGE, { deliverAs: "followUp" });
+    } catch {
+      // Nothing left to resume. The user's next prompt starts a fresh turn on
+      // the compacted context either way.
+    }
+  }
+
+  // Fire one compaction and resolve when it settles. Resolving (rather than
+  // leaving it floating) is what lets agent_end await it; the mid-run caller
+  // awaits a promise that is already effectively fire-and-forget from pi's side.
+  function fire(ctx: any, usage: ContextUsageLike): Promise<void> {
     compacting = true;
     outstanding += 1;
-    preCompactPercent = usage!.percent;
+    preCompactPercent = usage.percent;
 
     // Everything below runs after pi's compaction settles, when the session may
     // already be gone: a stale `ctx.ui` or `pi.sendUserMessage()` throws, and
@@ -264,18 +372,11 @@ export default function (pi: ExtensionAPI) {
         // no longer a UI to notify, and that is not worth a crash.
       }
     };
-    const resumeRun = () => {
-      try {
-        pi.sendUserMessage(RESUME_MESSAGE);
-      } catch {
-        // Same: nothing left to resume. The user's next prompt starts a fresh
-        // turn on the compacted context either way.
-      }
-    };
+    const resumeRun = queueResume;
 
-    const windowK = Math.round((usage!.contextWindow / 1000) * 10) / 10;
+    const windowK = Math.round((usage.contextWindow / 1000) * 10) / 10;
     notify(
-      `context at ${Math.round(usage!.percent!)}% of ${windowK}k — compacting mid-run to stay under the window`,
+      `context at ${Math.round(usage.percent!)}% of ${windowK}k, compacting mid-run to stay under the window`,
       "info",
     );
     // pi's public compact() is the *manual* path: it aborts the in-flight run,
@@ -283,47 +384,53 @@ export default function (pi: ExtensionAPI) {
     // On its own that strands an autonomous task at the prompt — so we resume it
     // from onComplete once the agent is back and idle. sendUserMessage always
     // triggers a turn, driving the run forward on the freshly-compacted context.
-    ctx.compact({
+    return new Promise<void>((settled) => ctx.compact({
       onComplete: () => {
         outstanding = Math.max(0, outstanding - 1);
         compacting = false;
         measurePending = true;
         resumeRun();
+        settled();
       },
       onError: (err?: { message?: string }) => {
         outstanding = Math.max(0, outstanding - 1);
         compacting = false;
-
-        switch (classifyCompactionError(err?.message)) {
-          // Someone else's compaction landed first (#91, #109). The context is
-          // compacted (only our call lost the race), so this is a success for
-          // every purpose except the return value: arm the #68 measurement and
-          // resume the run, exactly as onComplete would. Pausing here is what
-          // stranded the run at the prompt with a "could not proceed" warning.
-          case "already":
-            measurePending = true;
-            resumeRun();
-            return;
-          // Aborted run, or the session being disposed underneath us (#108).
-          // Nothing failed and nothing is stuck: leave the watchdog armed and
-          // say nothing. The next turn re-evaluates usage from scratch.
-          case "cancelled":
-            return;
-          // A real failure ("Nothing to compact (session too small)", a provider
-          // error): pause rather than silently retrying. A repeated failed
-          // compaction is exactly the wedge in #68, so stop and tell the user;
-          // it re-arms when usage recovers (step 2).
-          default: {
-            paused = true;
-            const why = err?.message ? ` (${err.message})` : "";
-            notify(
-              `automatic compaction could not proceed${why} — paused to avoid a loop (issue #68). ` +
-                `Free space with /clear or use a larger-context model.`,
-              "warning",
-            );
+        // Settle on every path: an awaiting agent_end handler must never be
+        // left hanging, whatever pi decided about the compaction.
+        try {
+          switch (classifyCompactionError(err?.message)) {
+            // Someone else's compaction landed first (#91, #109). The context is
+            // compacted (only our call lost the race), so this is a success for
+            // every purpose except the return value: arm the #68 measurement and
+            // resume the run, exactly as onComplete would. Pausing here is what
+            // stranded the run at the prompt with a "could not proceed" warning.
+            case "already":
+              measurePending = true;
+              resumeRun();
+              return;
+            // Aborted run, or the session being disposed underneath us (#108).
+            // Nothing failed and nothing is stuck: leave the watchdog armed and
+            // say nothing. The next turn re-evaluates usage from scratch.
+            case "cancelled":
+              return;
+            // A real failure ("Nothing to compact (session too small)", a provider
+            // error): pause rather than silently retrying. A repeated failed
+            // compaction is exactly the wedge in #68, so stop and tell the user;
+            // it re-arms when usage recovers (step 2).
+            default: {
+              paused = true;
+              const why = err?.message ? ` (${err.message})` : "";
+              notify(
+                `automatic compaction could not proceed${why} — paused to avoid a loop (issue #68). ` +
+                  `Free space with /clear or use a larger-context model.`,
+                "warning",
+              );
+            }
           }
+        } finally {
+          settled();
         }
       },
-    });
-  });
+    }));
+  }
 }
