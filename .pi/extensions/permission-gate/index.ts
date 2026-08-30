@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { SHELL_TOOLS, detectWriteTargets, splitCommandChain } from "../_shared/shell-write.ts";
+import { createEditConfirmer } from "./manual-edit-confirm.ts";
 
 // Port of tools.py::_SAFE_PREFIXES + agent.py::_check_permission. Shell
 // commands not matching the whitelist are blocked in "auto" mode. In
@@ -80,7 +81,10 @@ function getPermissionMode(): "auto" | "accept-all" | "manual" {
   return "auto";
 }
 
+const WRITE_TOOLS = new Set(["write", "edit"]);
+
 export default function (pi: ExtensionAPI) {
+  const editConfirmer = createEditConfirmer();
   pi.on("tool_call", async (event, ctx) => {
     const mode = getPermissionMode();
     if (mode === "accept-all") return;
@@ -88,8 +92,15 @@ export default function (pi: ExtensionAPI) {
     const toolName = (event as any).toolName;
     const input: any = (event as any).input ?? (event as any).args;
 
-    // Only gate shell-family tools; pi has its own confirmation flow for
-    // destructive edits via the TUI.
+    if (WRITE_TOOLS.has(toolName)) {
+      if (mode === "manual") {
+        if ((await editConfirmer.confirm(ctx, String(toolName), input)) === "deny") {
+          return { block: true, reason: "edit cancelled by user" };
+        }
+      }
+      return;
+    }
+
     if (SHELL_TOOLS.has(toolName)) {
       const cmd = input?.command;
       if (typeof cmd === "string") {
