@@ -41,3 +41,4 @@ brainstorm_outputs/
 
 # deep-research batch eval artifacts
 benchmarks/deep_research_runs/
+dist/
