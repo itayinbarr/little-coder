@@ -228,7 +228,11 @@ class LittleCoderAgent(BaseAgent):
             )
             try:
                 result = await asyncio.to_thread(rpc.prompt_and_collect, prompt, 3600)
+                stop_reason = getattr(result, "stop_reason", "unknown")
                 if log_fh:
+                    # Distinguishes a crashed pi from a model that ran long;
+                    # both used to look identical here.
+                    log_fh.write(f"=== stop_reason: {stop_reason} ===\n")
                     log_fh.write(f"=== assistant text ===\n{result.assistant_text}\n\n")
                     for tc in result.tool_calls:
                         log_fh.write(f">> {tc['name']}({tc.get('args', {})})\n")
@@ -245,6 +249,7 @@ class LittleCoderAgent(BaseAgent):
                 # Harbor's AgentContext: populate what we can. Token usage
                 # isn't currently plumbed through pi-ai; leave None.
                 context.metadata = {
+                    "stop_reason": stop_reason,
                     "n_tool_calls": len(result.tool_calls),
                     "n_turns": result.turn_count,
                     "n_compactions": result.compaction_events,

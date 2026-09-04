@@ -180,6 +180,7 @@ def _run_task(
         turn_count = 0
         compactions = 0
         agent_ended = False
+        stop_reason = ""
         stderr = ""
         agent_error = ""
 
@@ -198,6 +199,11 @@ def _run_task(
                 turn_count = result.turn_count
                 compactions = result.compaction_events
                 agent_ended = result.agent_ended
+                # Why the run ended. Without it a crashed pi scores whatever
+                # extract_final_answer() finds in a truncated transcript --
+                # persisted, in seconds, indistinguishable from a genuine
+                # wrong answer. getattr for older rpc_client.
+                stop_reason = getattr(result, "stop_reason", "")
                 notifications = rpc.notifications()
                 stderr = rpc.stderr()
         except Exception as e:
@@ -231,6 +237,7 @@ def _run_task(
             "n_notifications": len(notifications),
             "compactions": compactions,
             "agent_ended": agent_ended,
+            "stop_reason": stop_reason,
             "agent_error": agent_error,
             "model_answer": model_answer,
         }

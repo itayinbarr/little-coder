@@ -265,6 +265,10 @@ class LittleCoderAgent(BaseAgent):
                 text_out = result.assistant_text
                 turns = result.turn_count
                 if log_fh:
+                    # Distinguishes a crashed pi from a model that simply ran
+                    # long; both used to look identical in this log.
+                    log_fh.write(
+                        f"=== stop_reason: {getattr(result, 'stop_reason', 'unknown')} ===\n")
                     log_fh.write(f"=== assistant text ===\n{text_out}\n\n")
                     for tc in result.tool_calls:
                         log_fh.write(f">> {tc['name']}({tc.get('args', {})})\n")
