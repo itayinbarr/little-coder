@@ -34,6 +34,9 @@ BENCHMARK_ROOT = Path.home() / "Documents" / "polyglot-benchmark"
 REPO_ROOT = Path(__file__).parent.parent
 RESULTS_FILE = Path(__file__).parent / "results_full_polyglot.json"
 LOG_ROOT = Path(__file__).parent / "full_polyglot_logs"
+#: Caps applied to persisted trajectories -- see _dump_trajectory.
+TRAJECTORY_TEXT_CHARS = 200_000
+TRAJECTORY_FIELD_CHARS = 20_000
 #: Give up if this many exercises fail in a row -- a broken environment,
 #: not broken exercises.
 MAX_CONSECUTIVE_ERRORS = 3
@@ -125,6 +128,75 @@ def _save_results(data: dict):
 
 # ── Core loop ──────────────────────────────────────────────────────────────
 
+
+def _clip(value, limit: int):
+    """Bound a field before it is serialised into the trajectory."""
+    if isinstance(value, str):
+        return value[:limit]
+    if value is None:
+        return value
+    text = json.dumps(value, default=str)
+    return value if len(text) <= limit else text[:limit]
+
+
+def _dump_trajectory(log_dir, attempt_name, result, work=None):
+    """Persist what the harness otherwise discards.
+
+    Only the final pytest output survives a run today, so a failure can be seen
+    but not explained. PromptResult already carries the assistant text and every
+    tool call; the work dir is a TemporaryDirectory destroyed on scope exit,
+    taking the model's actual code with it.
+
+    Writes per attempt: trajectory_<n>.json, trajectory_<n>.txt, workdir_<n>/.
+    """
+    try:
+        payload = {
+            "attempt": attempt_name,
+            "agent_ended": getattr(result, "agent_ended", None),
+            "turn_count": getattr(result, "turn_count", None),
+            "compaction_events": getattr(result, "compaction_events", None),
+            "assistant_text": (getattr(result, "assistant_text", "") or "")[:TRAJECTORY_TEXT_CHARS],
+            # write/Write args carry whole file bodies and bash results whole
+            # command output; uncapped this reaches hundreds of MB per exercise.
+            "tool_calls": [
+                {
+                    **tc,
+                    "args": _clip(tc.get("args"), TRAJECTORY_FIELD_CHARS),
+                    "result_text": _clip(tc.get("result_text"), TRAJECTORY_FIELD_CHARS),
+                }
+                for tc in getattr(result, "tool_calls", [])
+            ],
+        }
+        (log_dir / f"trajectory_{attempt_name}.json").write_text(
+            json.dumps(payload, indent=2, default=str),
+            encoding="utf-8", errors="replace")
+        lines = []
+        for i, tc in enumerate(payload["tool_calls"], 1):
+            lines.append(f"--- [{i}] {tc.get('name')} err={tc.get('is_error')} ---")
+            lines.append(f"    args: {json.dumps(tc.get('args', {}), default=str)[:1500]}")
+            lines.append(f"    result: {str(tc.get('result_text', ''))[:1500]}")
+        lines.append("=== assistant text ===")
+        lines.append(payload["assistant_text"][:20000])
+        (log_dir / f"trajectory_{attempt_name}.txt").write_text(
+            "\n".join(lines), encoding="utf-8", errors="replace")
+        if work is not None and Path(work).exists():
+            snap = log_dir / f"workdir_{attempt_name}"
+            if snap.exists():
+                shutil.rmtree(snap, ignore_errors=True)
+            # A full 225-exercise run copies go/rust/cpp/js/java trees too;
+            # without this a snapshot pulls in target/, build/, node_modules/
+            # and compiled binaries, twice per exercise.
+            shutil.copytree(work, snap, ignore=shutil.ignore_patterns(
+                "__pycache__", ".pytest_cache", "target", "build", "node_modules",
+                ".gradle", "CMakeFiles", "*.o", "*.so", "*.class", "*.rlib"))
+    except Exception as exc:
+        # Diagnostics must never fail the exercise they are diagnosing.
+        try:
+            (log_dir / f"trajectory_{attempt_name}.ERROR").write_text(repr(exc))
+        except Exception:
+            pass
+
+
 def _was_clock_capped(result, elapsed: float) -> bool:
     """True when an attempt was cut off by the budget rather than finishing.
 
@@ -174,6 +246,7 @@ def _run_exercise(
         prompt = _build_prompt(ex_name, stubs, tests, desc["syntax_hint"])
 
         t0 = time.time()
+        r2 = None
         with PiRpc(model=model, cwd=str(work), allowed_tools=ALLOWED_TOOLS,
                    session_id=f"poly-{lang}-{ex_name}",
                    env={"LITTLE_CODER_PERMISSION_MODE": "accept-all"}) as rpc:
@@ -204,6 +277,12 @@ def _run_exercise(
                     attempt = "pass_2"
                 else:
                     timed_out = _was_clock_capped(r2, b_elapsed)
+
+        # Dumped AFTER the PiRpc block: on the timeout path the agent is still
+        # executing inside it, and copytree races file writes it is making.
+        _dump_trajectory(log_dir, "1", r1, work)
+        if r2 is not None:
+            _dump_trajectory(log_dir, "2", r2, work)
 
         elapsed = time.time() - t0
         (log_dir / "final_output.txt").write_text(out)
