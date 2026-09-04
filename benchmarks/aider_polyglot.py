@@ -273,6 +273,56 @@ def _build_prompt(exercise_name: str, stub_paths, test_paths, syntax_hint: str) 
 
 
 
+#: Environment knobs that change how the agent behaves, and therefore what a
+#: pass/fail means. Recorded so a result set is self-describing.
+_ENV_KNOBS = (
+    "PI_REASONING_MAX_TOKENS", "LITTLE_CODER_BASH_ALLOW",
+    "LITTLE_CODER_PERMISSION_MODE", "LITTLE_CODER_INJECT_MODE",
+    "LITTLE_CODER_SUBCODER_CONCURRENCY", "LITTLE_CODER_COMPACT_AT_PERCENT",
+)
+
+
+def _scoring_params(model: str, language: str, retry: bool, desc: dict) -> dict:
+    """Everything that affects whether an exercise passes.
+
+    Absent from results until now, so `--resume` could silently blend runs made
+    under different budgets into one file that looked homogeneous.
+    ATTEMPT_TIMEOUT_S is a module constant read from the environment at import,
+    not an argparse field, so it is captured here rather than from `args`.
+    """
+    return {
+        "model": model,
+        "language": language,
+        "attempt_timeout_s": ATTEMPT_TIMEOUT_S,
+        "test_timeout_s": desc.get("timeout_s"),
+        "retry": retry,
+        "score_in_copy": bool(desc.get("score_in_copy")),
+        "allowed_tools": sorted(set(ALLOWED_TOOLS)),
+        "env": {k: os.environ[k] for k in _ENV_KNOBS if k in os.environ},
+    }
+
+
+def _param_mismatches(recorded: dict, current: dict) -> list[str]:
+    """Which scoring parameters differ between a stored run and this one."""
+    if not recorded:
+        return ["<no parameters recorded>"]
+    out = []
+    for key in sorted(set(recorded) | set(current)):
+        was, now = recorded.get(key), current.get(key)
+        if was != now:
+            out.append(f"{key}: {was!r} -> {now!r}")
+    return out
+
+
+def _exit_code(records_written: dict) -> int:
+    """Non-zero when THIS invocation recorded a harness error.
+
+    Scoped to what this run wrote: a resumed run must not fail for an error it
+    inherited from an earlier file and never touched.
+    """
+    return 1 if any(str(r.get("status")) == "error" for r in records_written.values()) else 0
+
+
 def _stop_reason(result) -> str:
     """Why an attempt ended: agent_end | deadline | process_exit.
 
@@ -433,7 +483,10 @@ def _run_exercise(
             "stop_reason_1": _stop_reason(r1),
             "stop_reason_2": _stop_reason(r2) if r2 is not None else None,
             "elapsed_s": round(elapsed, 2),
-            "turn_count": (r1.turn_count + (r2.turn_count if not attempt == "pass_1" and retry else 0)) if attempt else r1.turn_count,
+            # Sum whatever actually ran. The previous expression dropped
+            # r2.turn_count whenever the exercise failed, so a two-attempt
+            # failure under-reported its own effort.
+            "turn_count": r1.turn_count + (r2.turn_count if r2 is not None else 0),
         }
 
 
@@ -449,15 +502,35 @@ def main():
     args = ap.parse_args()
 
     results = _load_results() if args.resume else {"exercises": {}, "meta": {}}
-    results["meta"].update({
-        "run_id": RUN_ID,
-        "model": args.model,
-        "started_at": datetime.datetime.now().isoformat(),
-    })
 
     desc = LANG_DESCRIPTORS.get(args.language)
     if desc is None:
         sys.exit(f"No descriptor for language '{args.language}'. Supported: {list(LANG_DESCRIPTORS)}")
+
+    params = _scoring_params(args.model, args.language, not args.no_retry, desc)
+    if args.resume:
+        mismatches = _param_mismatches(results["meta"].get("scoring_params", {}), params)
+        if mismatches and results["exercises"]:
+            # Warn rather than refuse: the documented canonical run deliberately
+            # changed a scoring parameter mid-run and resumed
+            # (docs/benchmark-qwen3.6-35b-a3b.md). Refusing would have blocked
+            # it. Every record carries its own parameters, so a mixed file stays
+            # analysable instead of merely looking homogeneous.
+            print("WARNING: resuming with different scoring parameters --", file=sys.stderr)
+            for line in mismatches:
+                print(f"  {line}", file=sys.stderr)
+            print("  Existing results were produced under the old values; new ones "
+                  "will carry the new values.", file=sys.stderr)
+
+    # runs[] keeps every invocation's parameters instead of overwriting them,
+    # so meta.model no longer describes only the last run of a mixed file.
+    results["meta"].setdefault("runs", []).append({
+        "run_id": RUN_ID,
+        "started_at": datetime.datetime.now().isoformat(),
+        "scoring_params": params,
+    })
+    results["meta"]["scoring_params"] = params
+    results["meta"]["run_id"] = RUN_ID
 
     practice = desc["practice_dir"]
     if args.exercise:
@@ -468,6 +541,7 @@ def main():
             names = names[:args.exercises]
 
     consecutive_errors = 0
+    written_this_run: dict[str, dict] = {}
     for name in names:
         key = f"{args.language}/{name}"
         if args.resume and results["exercises"].get(key, {}).get("status") in ("pass_1", "pass_2"):
@@ -488,7 +562,9 @@ def main():
             r = {"status": "error", "reason": f"{type(exc).__name__}: {exc}"[:400]}
             print(f"[{args.language}/{name}] ERROR {r['reason']}")
 
+        r["scoring_params"] = params
         results["exercises"][key] = r
+        written_this_run[key] = r
         _save_results(results)
         # Counts BOTH raised exceptions and returned {"status": "error"} --
         # _run_exercise returns that for a missing exercise directory, so a
@@ -508,6 +584,12 @@ def main():
         for k, v in results["exercises"].items()
     }, indent=2))
 
+    code = _exit_code(written_this_run)
+    if code:
+        bad = [k for k, v in written_this_run.items() if str(v.get("status")) == "error"]
+        print(f"harness errors in this run: {', '.join(bad)}", file=sys.stderr)
+    return code
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
