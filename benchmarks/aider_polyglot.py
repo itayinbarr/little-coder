@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import uuid
 import sys
 import tempfile
 import time
@@ -34,6 +35,11 @@ BENCHMARK_ROOT = Path.home() / "Documents" / "polyglot-benchmark"
 REPO_ROOT = Path(__file__).parent.parent
 RESULTS_FILE = Path(__file__).parent / "results_full_polyglot.json"
 LOG_ROOT = Path(__file__).parent / "full_polyglot_logs"
+#: Identifies one invocation, so records and artifacts can be traced back to the
+#: run that produced them. RESULTS_FILE and LOG_ROOT are both deterministic and
+#: shared across runs, which has already caused artifacts from different runs to
+#: be compared as if they came from one.
+RUN_ID = f"{datetime.datetime.now():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
 #: Caps applied to persisted trajectories -- see _dump_trajectory.
 TRAJECTORY_TEXT_CHARS = 200_000
 TRAJECTORY_FIELD_CHARS = 20_000
@@ -151,6 +157,25 @@ def _save_results(data: dict):
 # ── Core loop ──────────────────────────────────────────────────────────────
 
 
+def _purge_log_dir(log_dir: Path):
+    """Remove artifacts from previous runs of this exercise.
+
+    LOG_ROOT/<lang>/<exercise> is deterministic and nothing cleaned it, so a
+    one-attempt rerun left the previous run's trajectory_2/workdir_2 sitting
+    next to a fresh trajectory_1. Those pairs look like one run and are not:
+    comparing them produced a confident, wrong conclusion during review.
+    """
+    for pattern in ("trajectory_*", "workdir_*", "final_output*"):
+        for path in log_dir.glob(pattern):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+
+
 def _clip(value, limit: int):
     """Bound a field before it is serialised into the trajectory."""
     if isinstance(value, str):
@@ -208,9 +233,22 @@ def _dump_trajectory(log_dir, attempt_name, result, work=None):
             # A full 225-exercise run copies go/rust/cpp/js/java trees too;
             # without this a snapshot pulls in target/, build/, node_modules/
             # and compiled binaries, twice per exercise.
-            shutil.copytree(work, snap, ignore=shutil.ignore_patterns(
+            ignore = shutil.ignore_patterns(
                 "__pycache__", ".pytest_cache", "target", "build", "node_modules",
-                ".gradle", "CMakeFiles", "*.o", "*.so", "*.class", "*.rlib"))
+                ".gradle", "CMakeFiles", "*.o", "*.so", "*.class", "*.rlib")
+            # A file can vanish mid-walk while the agent is still active. One
+            # retry beats losing the snapshot to the blanket except below,
+            # which would leave only a .ERROR file for the very case the
+            # snapshot exists to explain.
+            for attempt_i in range(2):
+                try:
+                    shutil.copytree(work, snap, ignore=ignore)
+                    break
+                except FileNotFoundError:
+                    shutil.rmtree(snap, ignore_errors=True)
+                    if attempt_i == 1:
+                        raise
+                    time.sleep(0.5)
     except Exception as exc:
         # Diagnostics must never fail the exercise they are diagnosing.
         try:
@@ -261,6 +299,7 @@ def _run_exercise(
 
     log_dir = LOG_ROOT / lang / ex_name
     log_dir.mkdir(parents=True, exist_ok=True)
+    _purge_log_dir(log_dir)
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / ex_name
@@ -281,7 +320,13 @@ def _run_exercise(
             ta = time.time()
             r1 = rpc.prompt_and_collect(prompt, timeout=ATTEMPT_TIMEOUT_S)
             a_elapsed = time.time() - ta
+            # Snapshot BEFORE the tests run and before any retry prompt is
+            # sent, so the artifact reflects what THIS attempt produced. Both
+            # dumps previously happened after the block, so trajectory_1 and
+            # trajectory_2 captured the same post-retry tree.
+            _dump_trajectory(log_dir, "1", r1, work)
             passed, out = desc["run_tests"](work, desc["timeout_s"])
+            (log_dir / "final_output_1.txt").write_text(out)
             attempt = "pass_1" if passed else None
             timed_out = (not passed) and _was_clock_capped(r1, a_elapsed)
 
@@ -294,17 +339,13 @@ def _run_exercise(
                 tb = time.time()
                 r2 = rpc.prompt_and_collect(retry_prompt, timeout=ATTEMPT_TIMEOUT_S)
                 b_elapsed = time.time() - tb
+                _dump_trajectory(log_dir, "2", r2, work)
                 passed, out = desc["run_tests"](work, desc["timeout_s"])
+                (log_dir / "final_output_2.txt").write_text(out)
                 if passed:
                     attempt = "pass_2"
                 else:
                     timed_out = _was_clock_capped(r2, b_elapsed)
-
-        # Dumped AFTER the PiRpc block: on the timeout path the agent is still
-        # executing inside it, and copytree races file writes it is making.
-        _dump_trajectory(log_dir, "1", r1, work)
-        if r2 is not None:
-            _dump_trajectory(log_dir, "2", r2, work)
 
         elapsed = time.time() - t0
         (log_dir / "final_output.txt").write_text(out)
@@ -312,6 +353,7 @@ def _run_exercise(
             print(f"[{lang}/{ex_name}] {'PASS' if passed else 'FAIL'} in {elapsed:.1f}s on {attempt or 'fail'}")
 
         return {
+            "run_id": RUN_ID,
             "status": attempt or ("fail_timeout" if timed_out else "fail"),
             "elapsed_s": round(elapsed, 2),
             "turn_count": (r1.turn_count + (r2.turn_count if not attempt == "pass_1" and retry else 0)) if attempt else r1.turn_count,
@@ -331,6 +373,7 @@ def main():
 
     results = _load_results() if args.resume else {"exercises": {}, "meta": {}}
     results["meta"].update({
+        "run_id": RUN_ID,
         "model": args.model,
         "started_at": datetime.datetime.now().isoformat(),
     })
