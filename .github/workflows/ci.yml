@@ -26,3 +26,21 @@ jobs:
 
       # --ignore-scripts: don't download playwright browsers on every CI run.
       - run: npm ci --ignore-scripts
+
+  pytest:
+    name: benchmarks pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install pytest
+
+      # The PiRpc terminal-reason tests drive a fake pi subprocess
+      # (benchmarks/fake_pi.py), so they need neither the pi CLI nor a model
+      # server. The older tests in test_rpc_client.py self-skip without
+      # node_modules/.bin/pi.
+      - run: python -m pytest benchmarks/ -q

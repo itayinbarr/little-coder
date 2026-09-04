@@ -49,6 +49,10 @@ def _extension_paths() -> list[str]:
     return paths
 
 
+class PiProcessExited(RuntimeError):
+    """pi exited before completing the request. Carries its stderr tail."""
+
+
 @dataclass
 class PromptResult:
     """Outcome of a single prompt_and_collect() call."""
@@ -57,6 +61,11 @@ class PromptResult:
     agent_ended: bool = False
     compaction_events: int = 0
     turn_count: int = 0
+    #: Why the call returned: "agent_end" (pi finished the turn), "deadline"
+    #: (budget expired), or "process_exit" (pi died mid-run). Callers must not
+    #: infer this from elapsed time -- a crash burns the full budget too,
+    #: because stdout EOF used not to wake the drain.
+    stop_reason: str = "agent_end"
 
 
 class PiRpc:
@@ -137,6 +146,8 @@ class PiRpc:
         self._lock = threading.Lock()
         self._cv = threading.Condition(self._lock)
         self._closed = False
+        #: Set once pi's stdout reaches EOF, i.e. the process is going away.
+        self._eof = False
         self._stderr_buf: list[str] = []
         # ctx.ui.notify messages from extensions — used by the benchmark
         # harnesses to count skill injections, thinking-budget fires,
@@ -153,6 +164,18 @@ class PiRpc:
         # Use explicit readline() — `for line in stdout` buffers opaquely
         # and can delay event delivery well past newlines in pi's stream.
         assert self._proc.stdout is not None
+        try:
+            self._read_loop_body()
+        finally:
+            # try/finally, not "after the break": if the loop raises (e.g. the
+            # pipe is torn down under it) waiters must still be woken, or they
+            # block for the full timeout and a crash is indistinguishable from
+            # a deadline.
+            with self._cv:
+                self._eof = True
+                self._cv.notify_all()
+
+    def _read_loop_body(self):
         while True:
             line = self._proc.stdout.readline()
             if not line:
@@ -237,11 +260,17 @@ class PiRpc:
         start = time.time()
         with self._cv:
             while rid not in self._responses:
+                if self._eof:
+                    break
                 remaining = timeout - (time.time() - start)
                 if remaining <= 0:
                     raise TimeoutError(f"pi did not respond to request {rid} within {timeout}s")
                 self._cv.wait(timeout=remaining)
-            return self._responses.pop(rid)
+            if rid in self._responses:
+                return self._responses.pop(rid)
+        raise PiProcessExited(
+            f"pi exited before acknowledging request {rid}; stderr:\n{self.stderr()}"
+        )
 
     def _drain_events_until(self, predicate, timeout: float) -> list[dict]:
         """Drain events until `predicate(event)` returns True or timeout."""
@@ -254,6 +283,8 @@ class PiRpc:
                     collected.append(ev)
                     if predicate(ev):
                         return collected
+                if self._eof:
+                    return collected      # queue drained above; pi is gone
                 remaining = timeout - (time.time() - start)
                 if remaining <= 0:
                     return collected
@@ -262,6 +293,8 @@ class PiRpc:
     # ── Public API ───────────────────────────────────────────────────────
     def prompt_and_collect(self, message: str, timeout: float = 900) -> PromptResult:
         """Send a prompt, drain events until agent_end, return summary."""
+        if self._closed:
+            raise RuntimeError("prompt_and_collect() on a closed PiRpc")
         rid = str(uuid.uuid4())
         self._send({"id": rid, "type": "prompt", "message": message})
         resp = self._await_response(rid, timeout=30)
@@ -274,6 +307,15 @@ class PiRpc:
         )
 
         result = PromptResult()
+        # Derived from what was observed, not from how long it took: a crash
+        # burns the same wall-clock as a deadline.
+        saw_agent_end = any(ev.get("type") == "agent_end" for ev in events)
+        if saw_agent_end:
+            result.stop_reason = "agent_end"
+        elif self._eof or self._proc.poll() is not None:
+            result.stop_reason = "process_exit"
+        else:
+            result.stop_reason = "deadline"
         pending: dict[str, dict] = {}
         for ev in events:
             t = ev.get("type")
@@ -309,7 +351,20 @@ class PiRpc:
         self._send({"id": rid, "type": "new_session"})
         self._await_response(rid)
 
+    def _settle_stderr(self, timeout: float = 1.0):
+        """Let the existing stderr reader finish once pi is gone.
+
+        Before the EOF fix, callers only reached stderr() after a full timeout,
+        by which point the reader had long since drained. Returning promptly
+        now races it, so wait briefly for the thread to finish.
+        """
+        if self._eof or self._proc.poll() is not None:
+            reader = getattr(self, "_stderr_reader", None)
+            if reader is not None and reader.is_alive():
+                reader.join(timeout=timeout)
+
     def stderr(self) -> str:
+        self._settle_stderr()
         return "\n".join(self._stderr_buf)
 
     def notifications(self) -> list[dict]:
