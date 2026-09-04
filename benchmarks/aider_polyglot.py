@@ -40,8 +40,30 @@ TRAJECTORY_FIELD_CHARS = 20_000
 #: Give up if this many exercises fail in a row -- a broken environment,
 #: not broken exercises.
 MAX_CONSECUTIVE_ERRORS = 3
-#: Per-attempt RPC budget, seconds.
-ATTEMPT_TIMEOUT_S = 900
+def _positive_int_env(name: str, default: int) -> int:
+    """Parse a positive-integer env var, failing with a readable message.
+
+    A bare ValueError traceback (ATTEMPT_TIMEOUT_S=30m) is unhelpful, and a
+    silently-accepted 0 is worse: _drain_events_until returns immediately with
+    no events, so every exercise would record fail_timeout with a 0-turn
+    trajectory.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit(f"{name}: expected a positive integer (seconds), got {raw!r}")
+    if value <= 0:
+        raise SystemExit(f"{name}: must be > 0, got {value}")
+    return value
+
+
+#: Per-attempt RPC budget, seconds. 900 suits a fast hosted model; a local
+#: model with a large thinking budget needs more, or every hard exercise is
+#: clock-limited rather than capability-limited.
+ATTEMPT_TIMEOUT_S = _positive_int_env("ATTEMPT_TIMEOUT_S", 900)
 DEFAULT_MODEL = "llamacpp/qwen3.6-35b-a3b"
 
 # Allowed tools for Polyglot — the core filesystem + bash toolbox. Ports
