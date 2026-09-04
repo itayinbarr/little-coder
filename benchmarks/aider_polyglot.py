@@ -120,6 +120,7 @@ def _run_python(work: Path, timeout: int):
 
 LANG_DESCRIPTORS = {
     "python": {
+        "score_in_copy": True,
         "practice_dir": BENCHMARK_ROOT / "python" / "exercises" / "practice",
         "prepare": _prepare_python,
         "run_tests": _run_python,
@@ -257,17 +258,6 @@ def _dump_trajectory(log_dir, attempt_name, result, work=None):
             pass
 
 
-def _was_clock_capped(result, elapsed: float) -> bool:
-    """True when an attempt was cut off by the budget rather than finishing.
-
-    ``agent_ended`` is also False when pi crashes or closes stdout early, which
-    returns in seconds. That is a harness failure, not a slow model, and must
-    not be recorded as ``fail_timeout`` (which would additionally suppress the
-    retry). Require the attempt to have actually consumed the budget.
-    """
-    return (not result.agent_ended) and elapsed >= 0.9 * ATTEMPT_TIMEOUT_S
-
-
 def _build_prompt(exercise_name: str, stub_paths, test_paths, syntax_hint: str) -> str:
     stubs_list = "\n".join(f"  - {p}" for p in stub_paths)
     tests_list = "\n".join(f"  - {p}" for p in test_paths)
@@ -280,6 +270,88 @@ def _build_prompt(exercise_name: str, stub_paths, test_paths, syntax_hint: str) 
         "then implement the solution. When you believe the code is correct, "
         "stop calling tools."
     )
+
+
+
+def _stop_reason(result) -> str:
+    """Why an attempt ended: agent_end | deadline | process_exit.
+
+    Shim, deliberately: if rpc_client predates PromptResult.stop_reason (or that
+    change is reverted -- it has been once already), fall back to the old signal
+    so scoring degrades instead of breaking.
+    """
+    reason = getattr(result, "stop_reason", None)
+    if reason:
+        return reason
+    return "agent_end" if getattr(result, "agent_ended", False) else "deadline"
+
+
+def _is_empty_response(result) -> bool:
+    """pi finished the turn without doing anything.
+
+    An empty completion from the provider: agent_end arrives, but no tool call,
+    no turn of work and no assistant text. Six of sixteen recorded attempts in
+    this repo's log tree look like this. Classified as agent_end they read as
+    clean failures, hiding a provider-side fault behind a model-quality number.
+    """
+    return (
+        getattr(result, "agent_ended", False)
+        and (getattr(result, "turn_count", 0) or 0) <= 1
+        and not getattr(result, "tool_calls", None)
+        and not (getattr(result, "assistant_text", "") or "").strip()
+    )
+
+
+def _attempt_outcome(result) -> str:
+    """One attempt's outcome, independent of whether the tests passed."""
+    reason = _stop_reason(result)
+    if reason in ("process_exit", "deadline"):
+        return reason
+    if _is_empty_response(result):
+        return "empty_response"
+    return "completed"
+
+
+def _classify_status(passed: bool, attempt: str | None,
+                     outcome_1: str, outcome_2: str | None = None) -> str:
+    """Precedence for the recorded status. Pure, so it can be table-tested.
+
+    `passed` wins over everything: a pi that exits right after writing a correct
+    solution must not be downgraded from a pass to an error.
+    """
+    if passed:
+        return attempt or "pass_1"
+    last = outcome_2 if outcome_2 is not None else outcome_1
+    if outcome_2 is None:
+        # Only one attempt ran, so a dead process means the run itself failed.
+        if outcome_1 == "process_exit":
+            return "error"
+    elif outcome_2 == "process_exit":
+        # Attempt 1 was scored, so this is a failed exercise, not a broken run.
+        return "fail"
+    if last == "deadline":
+        return "fail_timeout"
+    if last == "empty_response":
+        return "empty_response"
+    return "fail"
+
+
+def _score(desc, work: Path, timeout: int):
+    """Run the tests against a COPY, so a live agent cannot influence the score.
+
+    prompt_and_collect returning does not mean pi is finished: measured on three
+    real exercises, pi still had a live child process at the moment the tests
+    would start. Scoring a copy removes the race on every path, keeps the retry's
+    session alive, and stops the test runner's droppings landing in the agent's
+    tree. Not enabled for cpp/rust, whose build dirs are absolute-path-bound and
+    would force a full rebuild per scoring pass.
+    """
+    if not desc.get("score_in_copy"):
+        return desc["run_tests"](work, timeout)
+    with tempfile.TemporaryDirectory() as scratch:
+        target = Path(scratch) / work.name
+        shutil.copytree(work, target)
+        return desc["run_tests"](target, timeout)
 
 
 def _run_exercise(
@@ -317,35 +389,38 @@ def _run_exercise(
             # indistinguishable from a completed one. Classified the same way
             # regardless of --no-retry, and re-evaluated for whichever attempt
             # ran last so a capped RETRY is not mislabelled a plain failure.
-            ta = time.time()
             r1 = rpc.prompt_and_collect(prompt, timeout=ATTEMPT_TIMEOUT_S)
-            a_elapsed = time.time() - ta
+            outcome_1 = _attempt_outcome(r1)
+            outcome_2 = None
+            # Belt-and-braces: an attempt that did not end cleanly may still
+            # have work in flight. Stop it before anything reads the tree.
+            # close() is idempotent, and this path never retries anyway.
+            if outcome_1 in ("deadline", "process_exit"):
+                rpc.close()
             # Snapshot BEFORE the tests run and before any retry prompt is
             # sent, so the artifact reflects what THIS attempt produced. Both
             # dumps previously happened after the block, so trajectory_1 and
             # trajectory_2 captured the same post-retry tree.
             _dump_trajectory(log_dir, "1", r1, work)
-            passed, out = desc["run_tests"](work, desc["timeout_s"])
+            passed, out = _score(desc, work, desc["timeout_s"])
             (log_dir / "final_output_1.txt").write_text(out)
             attempt = "pass_1" if passed else None
-            timed_out = (not passed) and _was_clock_capped(r1, a_elapsed)
 
-            if not passed and retry and not timed_out:
+            if not passed and retry and outcome_1 == "completed":
                 retry_prompt = (
                     "The tests failed. Output:\n\n```\n"
                     + out[-4000:]
                     + "\n```\n\nFix the implementation and try again."
                 )
-                tb = time.time()
                 r2 = rpc.prompt_and_collect(retry_prompt, timeout=ATTEMPT_TIMEOUT_S)
-                b_elapsed = time.time() - tb
+                outcome_2 = _attempt_outcome(r2)
+                if outcome_2 in ("deadline", "process_exit"):
+                    rpc.close()
                 _dump_trajectory(log_dir, "2", r2, work)
-                passed, out = desc["run_tests"](work, desc["timeout_s"])
+                passed, out = _score(desc, work, desc["timeout_s"])
                 (log_dir / "final_output_2.txt").write_text(out)
                 if passed:
                     attempt = "pass_2"
-                else:
-                    timed_out = _was_clock_capped(r2, b_elapsed)
 
         elapsed = time.time() - t0
         (log_dir / "final_output.txt").write_text(out)
@@ -354,7 +429,9 @@ def _run_exercise(
 
         return {
             "run_id": RUN_ID,
-            "status": attempt or ("fail_timeout" if timed_out else "fail"),
+            "status": _classify_status(passed, attempt, outcome_1, outcome_2),
+            "stop_reason_1": _stop_reason(r1),
+            "stop_reason_2": _stop_reason(r2) if r2 is not None else None,
             "elapsed_s": round(elapsed, 2),
             "turn_count": (r1.turn_count + (r2.turn_count if not attempt == "pass_1" and retry else 0)) if attempt else r1.turn_count,
         }
