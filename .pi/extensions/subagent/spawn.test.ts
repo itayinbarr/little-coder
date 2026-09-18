@@ -6,6 +6,8 @@ import {
   getFinalText,
   resolveLauncher,
   scheduleForceKill,
+  subCoderAccess,
+  subCoderTools,
   summarizeActivity,
   truncateReport,
   SUBCODER_ALLOWED_TOOLS,
@@ -160,5 +162,55 @@ describe("resolveLauncher / defaultConcurrency", () => {
     expect(defaultConcurrency()).toBe(2); // floored
 
     set(prev);
+  });
+});
+
+// ── issue #93: write-capable sub-coders ────────────────────────────────────
+describe("sub-coder access level (issue #93)", () => {
+  it("defaults to read-only, which is what makes fan-out safe", () => {
+    expect(subCoderAccess({})).toBe("read");
+    expect(subCoderTools("read")).not.toContain("write");
+    expect(subCoderTools("read")).not.toContain("edit");
+  });
+
+  it("LITTLE_CODER_SUBCODER_ACCESS=write adds edit and write", () => {
+    expect(subCoderAccess({ LITTLE_CODER_SUBCODER_ACCESS: "write" })).toBe("write");
+    const tools = subCoderTools("write").split(",");
+    expect(tools).toContain("edit");
+    expect(tools).toContain("write");
+    // Everything a read-only child had is still there.
+    expect(tools).toContain("read");
+    expect(tools).toContain("bash");
+  });
+
+  it("accepts `rw` too, and treats anything else as read-only", () => {
+    expect(subCoderAccess({ LITTLE_CODER_SUBCODER_ACCESS: "rw" })).toBe("write");
+    expect(subCoderAccess({ LITTLE_CODER_SUBCODER_ACCESS: "WRITE" })).toBe("write");
+    expect(subCoderAccess({ LITTLE_CODER_SUBCODER_ACCESS: "yes" })).toBe("read");
+    expect(subCoderAccess({ LITTLE_CODER_SUBCODER_ACCESS: "" })).toBe("read");
+  });
+
+  it("never grants dispatch, at either level, since a child that spawns children is a fan-out bomb", () => {
+    for (const access of ["read", "write"] as const) {
+      expect(subCoderTools(access).split(",")).not.toContain("dispatch");
+    }
+  });
+
+  it("buildChildEnv passes the level through to the child's tool gate", () => {
+    const prev = process.env.LITTLE_CODER_SUBCODER_ACCESS;
+    try {
+      process.env.LITTLE_CODER_SUBCODER_ACCESS = "write";
+      expect(buildChildEnv().LITTLE_CODER_ALLOWED_TOOLS).toContain("edit");
+      delete process.env.LITTLE_CODER_SUBCODER_ACCESS;
+      expect(buildChildEnv().LITTLE_CODER_ALLOWED_TOOLS).not.toContain("edit");
+    } finally {
+      if (prev === undefined) delete process.env.LITTLE_CODER_SUBCODER_ACCESS;
+      else process.env.LITTLE_CODER_SUBCODER_ACCESS = prev;
+    }
+  });
+
+  it("the child is still pinned to permission-mode auto whatever its access", () => {
+    // Write access is about edit/write, not about lifting the shell whitelist.
+    expect(buildChildEnv().LITTLE_CODER_PERMISSION_MODE).toBe("auto");
   });
 });

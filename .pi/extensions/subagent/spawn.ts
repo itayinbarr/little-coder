@@ -47,7 +47,7 @@ export function scheduleForceKill(
 // Tools a sub-coder may use: read + search + browse online + read-only bash.
 // Enforced by the tool-gating extension in the child. Deliberately omits
 // edit/write (children never mutate the tree) and `dispatch` (no fan-out bombs).
-export const SUBCODER_ALLOWED_TOOLS = [
+const SUBCODER_READONLY_TOOLS = [
   "read",
   "grep",
   "glob",
@@ -63,7 +63,40 @@ export const SUBCODER_ALLOWED_TOOLS = [
   "BrowserExtract",
   "BrowserBack",
   "BrowserHistory",
-].join(",");
+];
+
+export const SUBCODER_ALLOWED_TOOLS = SUBCODER_READONLY_TOOLS.join(",");
+
+/** What a sub-coder may do to the tree. `read` is the default and the reason
+ *  dispatch is cheap; `write` adds edit/write for the cases where it is not.
+ *  (Issue #93, @aole: "Possible to create subagents that are not restricted to
+ *  be readonly?") */
+export type SubCoderAccess = "read" | "write";
+
+/**
+ * `LITTLE_CODER_SUBCODER_ACCESS=write` lets children edit and write files.
+ *
+ * Off by default, and staying that way. Read-only children are what make
+ * dispatch safe to fan out: their reports come back as text, so two of them
+ * cannot race each other on the same file, and a child that misunderstands its
+ * task wastes tokens rather than the working tree. Turning that off is a real
+ * trade the user should make on purpose.
+ *
+ * `dispatch` is withheld at BOTH levels regardless: a child that can spawn
+ * children is a fan-out bomb, and that reasoning does not change when the child
+ * can also write.
+ */
+export function subCoderAccess(env: NodeJS.ProcessEnv = process.env): SubCoderAccess {
+  const v = (env.LITTLE_CODER_SUBCODER_ACCESS ?? "").trim().toLowerCase();
+  return v === "write" || v === "rw" ? "write" : "read";
+}
+
+/** The tool list for one access level. */
+export function subCoderTools(access: SubCoderAccess): string {
+  return access === "write"
+    ? [...SUBCODER_READONLY_TOOLS, "edit", "write"].join(",")
+    : SUBCODER_ALLOWED_TOOLS;
+}
 
 // Appended to every task so children answer with a short, parent-friendly
 // report rather than a wall of pasted file contents.
@@ -113,8 +146,9 @@ export function resolveLauncher(): string {
 export function buildChildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    // Constrain the child to read + browse, no mutation, no recursion.
-    LITTLE_CODER_ALLOWED_TOOLS: SUBCODER_ALLOWED_TOOLS,
+    // Constrain the child to read + browse and no recursion. Mutation is added
+    // only when the user asked for it (issue #93).
+    LITTLE_CODER_ALLOWED_TOOLS: subCoderTools(subCoderAccess()),
     // bash limited to permission-gate's read-only BUILTIN_SAFE_PREFIXES.
     LITTLE_CODER_PERMISSION_MODE: "auto",
     // Headless fast-path in the launcher (skip update-check + settings write).

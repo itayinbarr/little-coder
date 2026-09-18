@@ -6,6 +6,8 @@ import {
   extractPlanText,
   handlePlanApproval,
   handleImplement,
+  isBatchRun,
+  batchAnswers,
 } from "./index.ts";
 import type { SubCoderResult } from "../subagent/spawn.ts";
 
@@ -42,11 +44,14 @@ describe("wantsPlanModeAtStart (issue #84)", () => {
     process.argv = ["node", "pi"];
     expect(wantsPlanModeAtStart()).toBe(true);
   });
-  it("stays off for a headless run even with the flag set", () => {
+  it("a headless run plans when asked to; v1.20.0 lifted the old refusal (#95)", () => {
+    // It used to return false here, because the flow's middle was a dialog.
+    // The batch policy answers the questions from the research instead, so
+    // `little-coder -p --plan-mode "..."` is now a queueable job.
     process.env.LITTLE_CODER_PLAN_MODE = "1";
     delete process.env.LITTLE_CODER_SUBAGENT;
     process.argv = ["node", "pi", "--mode", "json", "-p"];
-    expect(wantsPlanModeAtStart()).toBe(false);
+    expect(wantsPlanModeAtStart()).toBe(true);
   });
   it("stays off in a sub-coder that inherited the env flag", () => {
     process.env.LITTLE_CODER_PLAN_MODE = "1";
@@ -743,5 +748,78 @@ describe("issue #98 - /implement command registration", () => {
     expect(typeof reg.opts.description).toBe("string");
     expect(reg.opts.description.length).toBeGreaterThan(0);
     expect(typeof reg.opts.handler).toBe("function");
+  });
+});
+
+// ── issue #95: batch (`-p`) planning ───────────────────────────────────────
+describe("batch planning (issue #95)", () => {
+  describe("isBatchRun", () => {
+    it("the TUI has a human to ask", () => {
+      expect(isBatchRun("tui")).toBe(false);
+    });
+
+    it("every headless mode does not", () => {
+      for (const mode of ["print", "json", "rpc"]) {
+        expect(isBatchRun(mode)).toBe(true);
+      }
+    });
+
+    it("an unknown mode is treated as interactive, which is the safe direction", () => {
+      // Guessing "batch" would silently skip the questions in a session that
+      // could have asked them.
+      expect(isBatchRun(undefined)).toBe(false);
+    });
+  });
+
+  describe("batchAnswers", () => {
+    const questions = [
+      { q: "Should the cache be in-process or Redis?", options: ["in-process", "Redis"] },
+      { q: "Is backwards compatibility required?", options: ["yes", "no"] },
+    ];
+
+    it("does not fabricate answers; it instructs the model to decide and SAY SO", () => {
+      // A plan whose assumptions are invisible is worse than one that never
+      // asked: reviewing them is the batch user's whole reason for reading it.
+      const out = batchAnswers(questions);
+      expect(out).toContain("Assumptions");
+      expect(out).toContain("could not be asked");
+      expect(out).toContain("rather than picking silently");
+    });
+
+    it("carries every question and its options through to the plan", () => {
+      const out = batchAnswers(questions);
+      for (const q of questions) {
+        expect(out).toContain(q.q);
+        for (const o of q.options) expect(out).toContain(o);
+      }
+    });
+
+    it("says nothing when the research raised no questions", () => {
+      expect(batchAnswers([])).toBe("(no clarifying questions)");
+    });
+  });
+
+  describe("wantsPlanModeAtStart", () => {
+    const saved = { ...process.env };
+    afterEach(() => {
+      process.env = { ...saved };
+    });
+
+    it("a headless run now plans when asked to, where it used to refuse", () => {
+      process.env.LITTLE_CODER_PLAN_MODE = "1";
+      delete process.env.LITTLE_CODER_SUBAGENT;
+      expect(wantsPlanModeAtStart()).toBe(true);
+    });
+
+    it("a sub-coder still never plans, whatever it inherited", () => {
+      process.env.LITTLE_CODER_PLAN_MODE = "1";
+      process.env.LITTLE_CODER_SUBAGENT = "1";
+      expect(wantsPlanModeAtStart()).toBe(false);
+    });
+
+    it("stays off unless explicitly asked", () => {
+      delete process.env.LITTLE_CODER_PLAN_MODE;
+      expect(wantsPlanModeAtStart()).toBe(false);
+    });
   });
 });

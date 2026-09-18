@@ -23,6 +23,9 @@
 //      interventions surface their own single "harness intervention: …" line,
 //      and a user ESC is self-evident; the stacked red marker was noise. A
 //      genuine custom errorMessage (not the default abort string) is preserved.
+//   2. Repair raw control characters inside a JSON-string `edits` argument to
+//      the edit tool, so a multi-line replacement from a small local model is
+//      recoverable instead of deadlocking the run (issue #127).
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -57,7 +60,146 @@ const ABORT_MARKER_PATCH = {
     "                }",
 };
 
-export const PATCHES = [ABORT_MARKER_PATCH];
+// ── patch 2: edit-tool `edits` JSON repair (issue #127) ─────────────────────
+//
+// pi already handles a model that sends `edits` as a JSON *string* instead of
+// an array. That recovery is a bare `JSON.parse` in a `try`, and it fails on
+// the single most common way a small local model writes one: raw, unescaped
+// newlines inside the `oldText` / `newText` values, which is what multi-line
+// code IS. `JSON.parse` throws "Bad control character in string literal", the
+// empty `catch` swallows it, `edits` stays a string, and schema validation
+// then refuses the call with `edits.0: must be object`.
+//
+// The consequence is worse than one failed call. `write` is refused for a file
+// that already exists (write-guard, by design), and `edit` cannot be produced,
+// so a model that has correctly diagnosed a bug has no way left to deliver the
+// patch. brlucasdx measured six of these in a single session.
+//
+// This cannot be fixed from an extension: pi's agent loop runs
+// prepareArguments -> validateToolArguments -> beforeToolCall, so validation
+// has already rejected the call before any `tool_call` hook sees it. Patching
+// pi's own recovery is the only place the repair can live.
+
+/**
+ * Escape raw CR / LF / TAB that appear INSIDE JSON string literals, leaving
+ * structural whitespace between tokens untouched.
+ *
+ * Quote/escape state is tracked so a `"` that is itself escaped (`\"`) does not
+ * flip the parser out of the string, which is exactly the case in code being
+ * edited. Total and allocation-cheap; a string that needs no repair comes back
+ * unchanged and re-parses identically.
+ *
+ * NOTE: this function is injected into pi's source verbatim via
+ * `String(repairJsonControlChars)`, so it must not reference anything outside
+ * its own body. The export exists so the unit tests exercise the SAME code that
+ * ships, rather than a copy that can drift from it.
+ */
+export function repairJsonControlChars(text) {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (const ch of text) {
+    if (esc) {
+      out += ch;
+      esc = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += ch;
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      out += ch;
+      continue;
+    }
+    if (inStr) {
+      if (ch === "\n") {
+        out += "\\n";
+        continue;
+      }
+      if (ch === "\r") {
+        out += "\\r";
+        continue;
+      }
+      if (ch === "\t") {
+        out += "\\t";
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+const EDIT_REPAIR_APPLIED = "little-coder patch: repair raw control chars in a JSON-string `edits`";
+
+/** The replacement `catch` body, with the repair function inlined. */
+function editRepairCatch(indent) {
+  const i = " ".repeat(indent);
+  return (
+    `catch {\n` +
+    `${i}    // ${EDIT_REPAIR_APPLIED} (issue #127).\n` +
+    `${i}    // Small local models emit literal newlines inside oldText/newText;\n` +
+    `${i}    // JSON.parse rejects those as "Bad control character in string\n` +
+    `${i}    // literal", and the original empty catch left \`edits\` a string for\n` +
+    `${i}    // schema validation to refuse. With write refused for an existing\n` +
+    `${i}    // file, that left the model no way to deliver a patch at all.\n` +
+    `${i}    try {\n` +
+    `${i}        const repair = ${String(repairJsonControlChars).split("\n").join(`\n${i}        `)};\n` +
+    `${i}        const repaired = JSON.parse(repair(args.edits));\n` +
+    `${i}        if (Array.isArray(repaired))\n` +
+    `${i}            args.edits = repaired;\n` +
+    `${i}    }\n` +
+    `${i}    catch { }\n` +
+    `${i}}`
+  );
+}
+
+// pi ships two copies of the edit tool: the coding agent's own (used by the
+// TUI and by `-p`) and pi-agent-core's harness copy (the path brlucasdx
+// quoted). They differ only in formatting, so each gets its own exact `find`.
+const EDIT_REPAIR_PATCHES = [
+  {
+    rel: "dist/core/tools/edit.js",
+    applied: EDIT_REPAIR_APPLIED,
+    find:
+      "            if (Array.isArray(parsed))\n" +
+      "                args.edits = parsed;\n" +
+      "        }\n" +
+      "        catch { }\n" +
+      "    }\n" +
+      "    const legacy = args;",
+    replace:
+      "            if (Array.isArray(parsed))\n" +
+      "                args.edits = parsed;\n" +
+      "        }\n" +
+      "        " + editRepairCatch(8) + "\n" +
+      "    }\n" +
+      "    const legacy = args;",
+  },
+  {
+    rel: "node_modules/@earendil-works/pi-agent-core/dist/harness/tools/edit.js",
+    applied: EDIT_REPAIR_APPLIED,
+    find:
+      "            if (Array.isArray(parsed))\n" +
+      "                args.edits = parsed;\n" +
+      "        }\n" +
+      "        catch { }\n" +
+      "    }\n" +
+      "    const legacy = args;",
+    replace:
+      "            if (Array.isArray(parsed))\n" +
+      "                args.edits = parsed;\n" +
+      "        }\n" +
+      "        " + editRepairCatch(8) + "\n" +
+      "    }\n" +
+      "    const legacy = args;",
+  },
+];
+
+export const PATCHES = [ABORT_MARKER_PATCH, ...EDIT_REPAIR_PATCHES];
 
 export function resolvePiRoot(piRootOverride) {
   if (piRootOverride && existsSync(join(piRootOverride, "package.json"))) {

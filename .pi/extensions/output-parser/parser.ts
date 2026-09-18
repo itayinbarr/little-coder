@@ -411,3 +411,50 @@ export function parseLiquidToolCalls(text: string): ExtractedCall[] {
   }
   return calls;
 }
+
+// ── issue #96: a "tool call" naming a tool that does not exist ──────────────
+//
+// @cal101 was working on JS code and got:
+//
+//   harness intervention: the model wrote 1 tool call(s) as text
+//   [myCustomAction] — nudging it back to native tool calls.
+//
+// followed, delightfully, by the model replying that it hadn't done anything.
+// It hadn't: an object in prose carrying a `"name"` key is not a tool call, and
+// `myCustomAction` is not a tool. #117 narrowed the NESTED shape by also
+// requiring an argument key, but a FLAT object still matches on `"name"` alone,
+// which is the shape a config blob or an array of records has.
+//
+// The reliable discriminator is not the object's shape; it is whether the tool
+// exists. The nudge asks the model to "re-issue this natively", and a tool that
+// is not registered cannot be issued natively by anyone, so for an unknown
+// name the intervention is not merely a false positive, it is an instruction
+// the model cannot carry out. Dropping those costs nothing real and removes the
+// whole class.
+
+/** Compare tool names the way models write them: `Write`, `write` and `WRITE`
+ *  are one tool, and pi resolves them case-insensitively too. */
+function normalizeToolName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Keep only the calls whose name is a tool this session actually has.
+ *
+ * `knownNames` empty or undefined means "we could not find out" (pi's
+ * `getAllTools()` is not available on every ctx shape), and in that case
+ * nothing is filtered, because guessing would silently drop real recoveries.
+ *
+ * Liquid/Pythonic calls are exempt. They arrive wrapped in `<|tool_call_start|>`
+ * special tokens, which no prose contains by accident, and their diagnostic
+ * (serve llama.cpp with `--jinja`) is about the CHANNEL rather than the tool, so
+ * it is worth showing even for a name we do not recognise.
+ */
+export function filterKnownTools(
+  calls: ExtractedCall[],
+  knownNames: readonly string[] | undefined,
+): ExtractedCall[] {
+  if (!knownNames || knownNames.length === 0) return calls;
+  const known = new Set(knownNames.map(normalizeToolName));
+  return calls.filter((c) => c.format === "liquid" || known.has(normalizeToolName(c.name)));
+}

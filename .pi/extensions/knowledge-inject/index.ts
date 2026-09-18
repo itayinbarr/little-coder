@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { skillPackDir } from "../_shared/skills-root.ts";
 import { parseSkillFile } from "../skill-inject/frontmatter.ts";
 import { injectionResult, makeDedupe } from "../_shared/inject.ts";
 import { allowedToolSet, toolsAvailable } from "../_shared/allowed-tools.ts";
@@ -31,9 +32,13 @@ export const MIN_SCORE_THRESHOLD = 2.0;
 const PER_ENTRY_CAP = 150;
 
 function dirs(): string[] {
+  // Search for the skills root rather than counting levels up: the level count
+  // differs between the little-coder checkout and the built pi package, and
+  // getting it wrong here fails silently (see _shared/skills-root.ts).
   const here = dirname(fileURLToPath(import.meta.url));
-  const repo = join(here, "..", "..", "..");
-  return [join(repo, "skills", "knowledge"), join(repo, "skills", "protocols")];
+  return ["knowledge", "protocols"]
+    .map((pack) => skillPackDir(here, pack))
+    .filter((d): d is string => d !== undefined);
 }
 
 function loadEntries(): void {

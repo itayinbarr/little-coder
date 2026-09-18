@@ -94,3 +94,40 @@ jobs:
             --generate-notes \
             --latest \
             --verify-tag
+
+  # Ships the extension + skill layer as a package vanilla pi users can install
+  # (PR #62 by @dbmrq). Runs only after the main publish succeeds: the two
+  # packages share a version, and a pi package on npm for a little-coder release
+  # that never published would be a version that does not exist.
+  publish-pi-package:
+    name: Publish pi package
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: read
+      id-token: write   # required for npm provenance via GitHub OIDC
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      # --ignore-scripts to match every other install path little-coder uses
+      # (issues #50 and #75): this package ships no install scripts, and the
+      # build below needs only the source tree.
+      - run: npm ci --ignore-scripts
+
+      - name: Build pi package
+        run: node scripts/build-pi-package.mjs
+
+      - name: Verify the built package is loadable
+        run: npx vitest run scripts/build-pi-package.test.mjs
+
+      - name: Publish pi package to npm with provenance
+        run: npm publish --provenance --access public
+        working-directory: ./dist/pi-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

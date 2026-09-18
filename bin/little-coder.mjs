@@ -226,10 +226,16 @@ let userExtensionWarnings = [];
 const withPiExtensions =
   process.argv.includes("--with-pi-extensions") || process.env.LITTLE_CODER_PI_EXTENSIONS === "1";
 
-// Start the interactive session already in plan mode (issue #84). The flag is
-// stripped from the args forwarded to pi (below); the plan-mode extension reads
+// Start the session already in plan mode (issue #84). The flag is stripped from
+// the args forwarded to pi (below); the plan-mode extension reads
 // LITTLE_CODER_PLAN_MODE from the env at session_start. Not for sub-coder runs,
 // which set their own args and must not inherit plan mode.
+//
+// Since v1.20.0 this also covers `-p` / `--mode json`: a headless run plans
+// under the batch policy (the clarifying questions are answered from the
+// research and the assumptions stated in the plan) and writes the result to
+// `.pi/approved-plan.md` for a later `/implement` (issue #95), so a queue of
+// background jobs can plan as well as implement.
 const startInPlanMode =
   !isSubagent &&
   (process.argv.includes("--plan-mode") || process.env.LITTLE_CODER_PLAN_MODE === "1");

@@ -74,7 +74,7 @@ The agent uses the directory you launched it from as its working directory — `
 - **Keyboard shortcuts** — press **ctrl+h** for a panel of the keys worth knowing; `/hotkeys` is the full reference. **ctrl+o** expands tool output ("more"), **ctrl+t** toggles thinking blocks, **ctrl+p** cycles models.
 - **Tool skill cards**: little-coder injects a short usage card for the tools a turn is likely to need, chosen by error-recovery > recency > intent. **`/skills`** lists what is loaded and what each costs, `/skills <tool>` pins one when the selector keeps picking a different card, and `/skills off` returns to automatic selection ([#118](https://github.com/itayinbarr/little-coder/issues/118)).
 - **Prompt history** — from an empty input, **↑** recalls your recent prompts (most-recent first), **↓** walks forward. History persists across sessions, so a fresh session can recall prompts from earlier runs.
-- **Sub-coders (`dispatch`)** — little-coder can spawn isolated child sessions to research a question (read the repo + browse online, read-only) and report back concisely, without cluttering the main conversation. A live panel above the input tracks them. Sub-coders run serially by default (two of them contend for the same local model server and finish slower than one); opt into parallelism with `LITTLE_CODER_SUBCODER_CONCURRENCY=2` or more.
+- **Sub-coders (`dispatch`)** — little-coder can spawn isolated child sessions to research a question (read the repo + browse online, read-only) and report back concisely, without cluttering the main conversation. A live panel above the input tracks them. Sub-coders run serially by default (two of them contend for the same local model server and finish slower than one); opt into parallelism with `LITTLE_CODER_SUBCODER_CONCURRENCY=2` or more. They are read-only by design, which is what makes fanning them out safe, since their answers come back as text and two of them cannot race on the same file, but `LITTLE_CODER_SUBCODER_ACCESS=write` gives them `edit`/`write` when you want the work done rather than reported ([#93](https://github.com/itayinbarr/little-coder/issues/93)). Neither level ever grants `dispatch`: a child that can spawn children is a fan-out bomb.
 - **Background jobs (`ShellStart`)** — long commands (training, builds, servers, watchers) run in the background instead of blocking a turn, and little-coder wakes the model on *events in the job* rather than on a timer. A footer line shows what's running. See [Background jobs](#background-jobs) below.
 - **Per-phase models** — plan on a big model, implement on a small one, with `/plan-model` and `/action-model`. See [Per-phase model selection](#per-phase-model-selection) below.
 - **Sessions** — each session is auto-named from your first prompt (rename with `/name`) and shown in the terminal tab title. Use `/resume` to list and reopen past sessions for the current directory.
@@ -324,6 +324,23 @@ Urgency decides how the news arrives: a crash or an error-ish match interrupts t
 
 **Permissions.** `ShellStart` goes through the same whitelist as `bash`, so build and test commands usually need `LITTLE_CODER_BASH_ALLOW` (see [Permissions](#permissions)).
 
+## Your project's AGENTS.md
+
+little-coder launches pi with `--no-context-files`, so *its* `AGENTS.md` is the system prompt rather than whatever happens to sit in the current directory. That is why the small-model adaptations hold in any repo, and until v1.20.0 it also meant your project's own `AGENTS.md` was ignored outright, so the model globbed the whole tree at the start of every run to work out where it was ([#104](https://github.com/itayinbarr/little-coder/issues/104)).
+
+Now the nearest `AGENTS.md` (or `CLAUDE.md`, if there is no `AGENTS.md`) is found by walking up from the launch directory, and injected as project instructions. Three things keep it from undoing the reason `--no-context-files` is there:
+
+- It **adds**. little-coder's own prompt still governs behaviour, and the injected block says so, so a project file cannot quietly re-specify the harness.
+- It is **capped** at 4000 characters (~1k tokens) and truncation is reported, to you and to the model, rather than being silent. The lean cold start is the product.
+- It is injected **once**, as a hidden message at the conversation tail rather than a system-prompt append, so the cached prefix survives ([#73](https://github.com/itayinbarr/little-coder/issues/73)).
+
+`/project-context` shows which file loaded, its size, and its hash.
+
+| Env var | Values | Effect |
+|---|---|---|
+| `LITTLE_CODER_PROJECT_CONTEXT` | `0` / `off` / `false` | Don't load a project file at all, i.e. the pre-v1.20.0 behaviour. |
+| `LITTLE_CODER_PROJECT_CONTEXT_MAX_CHARS` | integer | Raise or lower the cap. `0` means no cap. |
+
 ## Per-phase model selection
 
 Plan on a big model, implement on a small one, without retyping ctrl+P at every transition ([#61](https://github.com/itayinbarr/little-coder/issues/61)).
@@ -340,14 +357,29 @@ Defaults come from `models.json` (`"planModel"` / `"actionModel"` / `"handover"`
 
 With `auto` (default), entering Plan Mode switches to the plan model and `/implement` hands over to the action model. The handover happens when implementation actually begins rather than at approval, so approving a plan you then decide to rewrite costs you nothing. With `manual`, the tags are shown but nothing switches on your behalf. That toggle matters more locally than it would on a hosted provider: **on a single llama.cpp backend a handover evicts and reloads weights**, so an automatic switch can mean a 15-second stall mid-thought. A handover where both phases resolve to the same model is a no-op rather than a reload, and a switch that fails (model unavailable, no key) degrades to staying put and says so. Leave both unset and nothing changes — each phase uses the active model.
 
+## Planning in a batch job
+
+Plan Mode's middle is interactive: research, then one to three clarifying questions, then the plan. Under `-p` there is nobody to ask, so headless runs used to refuse to plan at all, which is awkward for the workflow it matters most in, where a local model is a slow shared resource and jobs are queued and checked later ([#95](https://github.com/itayinbarr/little-coder/issues/95)).
+
+```bash
+little-coder -p --plan-mode "add rate limiting to the ingest endpoint"
+```
+
+The questions are still generated; they are answered from the research instead of from you, and the plan opens with an **Assumptions** section saying what was decided for each and why, which is the part a batch user actually needs to review. The plan is printed *and* written to `.pi/approved-plan.md`, so the next job in the queue can run `/implement` against it.
+
+Of the three policies that make sense here (skip the questions, pre-supply the answers from a file, or stop after generating them) this is the first. Pre-supplied answers need the question set to be stable across runs, and it is not; a two-phase run is by definition not unattended.
+
 ## Permissions
 
 little-coder gates shell tool calls — `Bash` and `ShellSession` alike — against a built-in safe-prefix whitelist (`ls`, `cat`, `head`, `tail`, `git log/status/diff`, `find`, `grep`, `cp`, `mv`, `mkdir`, `touch`, etc.) before pi's own confirmation flow ever sees them. `rm` and `sudo` are intentionally not on the list — add them via `LITTLE_CODER_BASH_ALLOW` per deployment if you really need them.
 
-Two rules beyond the prefix match, both from [#70](https://github.com/itayinbarr/little-coder/issues/70):
+Three rules beyond the prefix match:
 
-- **Every command in a chain is judged, not just the first.** `ls && rm -rf /` is refused on the `rm`, not allowed on the `ls`.
-- **A command that writes to a file through the shell is refused**, whatever it starts with. `cat > main.py << 'EOF'` is the same write as the `Write` tool and gets the same answer — use `Write` for a new file, `Edit` for an existing one. Redirects (`>`, `>>`), `tee`, and `dd of=` all count; `2>&1` and a `>` inside quotes don't.
+- **Every command in a chain is judged, not just the first** ([#70](https://github.com/itayinbarr/little-coder/issues/70)). `ls && rm -rf /` is refused on the `rm`, not allowed on the `ls`.
+- **A command that writes to a file through the shell is refused** ([#70](https://github.com/itayinbarr/little-coder/issues/70)), whatever it starts with. `cat > main.py << 'EOF'` is the same write as the `Write` tool and gets the same answer — use `Write` for a new file, `Edit` for an existing one. Redirects (`>`, `>>`), `tee`, and `dd of=` all count; `2>&1` and a `>` inside quotes don't.
+- **Matching a prefix is not enough** ([#94](https://github.com/itayinbarr/little-coder/issues/94)). The interpreters are on the list so that *scripts* can be run, so `python3 solution.py` passes and `python3 -c "..."` does not. The same goes for `node -e`/`-p`, `perl -e`/`-E`, `ruby -e`, `find -exec`/`-delete`, `sed -i`, and `env <command>`: each is a way to reach an effect the whitelist just refused.
+
+**What the whitelist is and isn't.** It is a speed bump against a model that takes a wrong turn, not a sandbox. `python3 script.py` is one `Write` away from `python3 -c`, and no prefix list can close that. If you need a real boundary, use a container or a VM, or put a human in the loop with `LITTLE_CODER_PERMISSION_MODE=manual`.
 
 In `accept-all` mode the whitelist is skipped, but the write guard still refuses a shell redirect that would clobber an existing file or a reserved device name — so the "small models don't rewrite whole files" guarantee holds in benchmark runs too.
 
@@ -357,6 +389,8 @@ Two env vars control the gate:
 |---|---|---|
 | `LITTLE_CODER_PERMISSION_MODE` | `auto` *(default)* / `accept-all` / `manual` | `auto`: block any shell command not on the whitelist. `accept-all`: skip the gate entirely, every shell call passes (the benchmark runner sets this). `manual`: prompt before every shell command (execute `y` / cancel `n`) and before every `write`/`edit` — you choose **Apply**, **Deny**, or **Apply all (this session)** to stop re-prompting for the rest of the session. `write`-guard's safety checks (reserved names, whole-file rewrites of existing files) still run even when you Apply. |
 | `LITTLE_CODER_BASH_ALLOW` | comma-separated prefixes | Extra allow-prefixes merged with the built-in list. **Trailing whitespace is meaningful**: `"make "` allows `make test` but not `makefoo`; `"make"` allows both. |
+
+`LITTLE_CODER_BASH_ALLOW` only adds prefixes; it does not lift the inline-code rule. To run `python3 -c` you want `accept-all` (or `manual`, if you would rather see each one).
 
 Examples:
 
@@ -368,7 +402,7 @@ export LITTLE_CODER_BASH_ALLOW="make ,docker compose ps"
 export LITTLE_CODER_PERMISSION_MODE=accept-all
 ```
 
-Write/Edit confirmations are pi's responsibility; little-coder doesn't intercept those.
+In `auto` and `accept-all`, write/edit confirmations are pi's own; `manual` adds little-coder's prompt in front of them.
 
 ---
 

@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { skillPackDir } from "../_shared/skills-root.ts";
 import { parseSkillFile } from "./frontmatter.ts";
 import { injectionResult, makeDedupe } from "../_shared/inject.ts";
 import { allowedToolSet, toolsAvailable } from "../_shared/allowed-tools.ts";
@@ -76,17 +77,19 @@ const INTENT_MAP: Record<string, string[]> = {
   investigate: ["dispatch"], parallel: ["dispatch"],
 };
 
-function skillsDir(): string {
-  // Extension lives at .pi/extensions/skill-inject/, repo root is 3 levels up
-  const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "..", "..", "..", "skills", "tools");
+function skillsDir(): string | undefined {
+  // Counting levels up from here is right in the little-coder checkout
+  // (.pi/extensions/skill-inject/ → root) and wrong in the pi package
+  // (extensions/skill-inject/ → root), where it silently found nothing.
+  // Search for the directory instead; see _shared/skills-root.ts.
+  return skillPackDir(dirname(fileURLToPath(import.meta.url)), "tools");
 }
 
 function loadSkills(): void {
   if (loaded) return;
   loaded = true;
   const dir = skillsDir();
-  if (!existsSync(dir)) return;
+  if (!dir) return;
   for (const file of readdirSync(dir)) {
     if (!file.endsWith(".md")) continue;
     const parsed = parseSkillFile(readFileSync(join(dir, file), "utf-8"));

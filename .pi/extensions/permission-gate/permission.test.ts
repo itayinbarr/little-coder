@@ -3,6 +3,9 @@ import setupPermissionGate, {
   isSafeBash,
   parseExtraPrefixes,
   getSafePrefixes,
+  tokenizeSegment,
+  unsafeInvocation,
+  firstUnsafeInvocation,
 } from "./index.ts";
 
 describe("isSafeBash", () => {
@@ -399,5 +402,117 @@ describe("getSafePrefixes", () => {
       if (prev === undefined) delete process.env.LITTLE_CODER_BASH_ALLOW;
       else process.env.LITTLE_CODER_BASH_ALLOW = prev;
     }
+  });
+});
+
+// ── issue #94: the interpreter hole ────────────────────────────────────────
+describe("inline-code invocations of whitelisted binaries (issue #94)", () => {
+  describe("tokenizeSegment", () => {
+    it("splits on whitespace", () => {
+      expect(tokenizeSegment("python3 app.py --fast")).toEqual(["python3", "app.py", "--fast"]);
+    });
+
+    it("keeps a quoted string as one word, flags inside it and all", () => {
+      // Without this, `python3 app.py "--dry-run -c"` would look like a -c call.
+      expect(tokenizeSegment('python3 app.py "--dry-run -c"')).toEqual([
+        "python3",
+        "app.py",
+        "--dry-run -c",
+      ]);
+    });
+
+    it("handles single quotes and backslash escapes", () => {
+      expect(tokenizeSegment("perl -e 'print 1'")).toEqual(["perl", "-e", "print 1"]);
+      expect(tokenizeSegment("cat my\\ file.txt")).toEqual(["cat", "my file.txt"]);
+    });
+
+    it("returns nothing for an empty or blank segment", () => {
+      expect(tokenizeSegment("   ")).toEqual([]);
+    });
+  });
+
+  describe("the exact commands reported in the thread", () => {
+    const REPORTED = [
+      'python3 -c "import os; os.remove(\'synthwave.html\')"',
+      'node -e "require(\'fs\').unlinkSync(\'synthwave.html\')"',
+      "perl -e 'unlink \"synthwave.html\"'",
+      "ruby -e 'File.delete(\"synthwave.html\")'",
+      "find . -name synthwave.html -exec rm {} \;",
+      "find . -name synthwave.html -delete",
+      "env bash -c 'rm synthwave.html'",
+      'python3 -c "import subprocess; subprocess.run([\'./build.sh\'])"',
+    ];
+
+    for (const cmd of REPORTED) {
+      it(`refuses: ${cmd}`, () => {
+        expect(unsafeInvocation(cmd)).not.toBeNull();
+        expect(isSafeBash(cmd)).toBe(false);
+      });
+    }
+  });
+
+  describe("what the interpreters are actually on the whitelist for", () => {
+    const ALLOWED = [
+      "python3 solution.py",
+      "python3 solution.py --verbose -c config.yaml",
+      "node server.js",
+      "python3 -u run.py",
+      "ruby script.rb",
+      "perl script.pl",
+      "find . -name '*.py'",
+      "find . -type f -name '*.ts' | head -20",
+      "sed -n '1,20p' file.ts",
+      "env",
+      "env FOO=1",
+    ];
+
+    for (const cmd of ALLOWED) {
+      it(`still allows: ${cmd}`, () => {
+        expect(unsafeInvocation(cmd)).toBeNull();
+        expect(isSafeBash(cmd)).toBe(true);
+      });
+    }
+  });
+
+  it("a flag AFTER the script path belongs to the script, not the interpreter", () => {
+    // `-c config.yaml` here is the program's own flag. Refusing it would break
+    // ordinary script runs, which is the whole reason the interpreters are on
+    // the list.
+    expect(unsafeInvocation("python3 train.py -c config.yaml")).toBeNull();
+  });
+
+  it("matches the interpreter by basename, so an absolute path is not a bypass", () => {
+    expect(unsafeInvocation('/usr/bin/python3 -c "import os"')).not.toBeNull();
+  });
+
+  it("refuses sed -i, which rewrites a file with no redirect for write-guard to see", () => {
+    expect(unsafeInvocation("sed -i 's/a/b/' app.py")).not.toBeNull();
+    expect(unsafeInvocation("sed -i.bak 's/a/b/' app.py")).not.toBeNull();
+    expect(unsafeInvocation("sed --in-place 's/a/b/' app.py")).not.toBeNull();
+  });
+
+  it("refuses env used to launch a command, not env used to print", () => {
+    expect(unsafeInvocation("env bash -c 'rm x'")).not.toBeNull();
+    expect(unsafeInvocation("env FOO=1 python3 -c 'import os'")).not.toBeNull();
+    expect(unsafeInvocation("env")).toBeNull();
+    expect(unsafeInvocation("env FOO=1 BAR=2")).toBeNull();
+  });
+
+  it("catches the inline call in ANY segment of a chain, not just the first", () => {
+    expect(isSafeBash('ls && python3 -c "import os; os.remove(\'x\')"')).toBe(false);
+  });
+
+  it("the refusal explains the distinction rather than just saying no", () => {
+    // v1.16.0's lesson: a refusal the model cannot act on gets worked around.
+    // It has to say the binary is fine and this USE of it is not.
+    const reason = firstUnsafeInvocation('python3 -c "import os"')!;
+    expect(reason).toContain("script.py");
+    expect(reason).toContain("whitelist");
+  });
+
+  it("`|| true` is no longer refused, because the no-ops are whitelisted", () => {
+    // @guppy42 on #94: refusing `true` made the model conclude `ls` was the
+    // problem and switch to glob.
+    expect(isSafeBash("ls /var/www 2>/dev/null || true")).toBe(true);
   });
 });

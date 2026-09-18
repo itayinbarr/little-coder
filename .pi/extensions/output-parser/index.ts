@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { parseTextToolCalls } from "./parser.ts";
+import { filterKnownTools, parseTextToolCalls } from "./parser.ts";
 import { harnessIntervention } from "../_shared/intervention.ts";
 
 // Detects malformed/fenced tool calls in assistant text and nudges the model
@@ -48,7 +48,22 @@ export default function (pi: ExtensionAPI) {
     const text = extractAssistantText(message);
     if (!text) return;
 
-    const calls = parseTextToolCalls(text);
+    // Only nudge about tools that exist. A name the session has never heard of
+    // cannot be "re-issued as a native tool call" by anyone, so an intervention
+    // about one is an instruction the model cannot follow (issue #96).
+    // getAllTools() is the full configured set rather than the currently ACTIVE
+    // one: a real tool that tool-gating has parked for this phase is still a
+    // slip worth catching, and treating it as prose would be the same bug in
+    // the other direction. A ctx without the accessor filters nothing.
+    let knownNames: string[] | undefined;
+    try {
+      const all = (ctx as any)?.getAllTools?.();
+      if (Array.isArray(all)) knownNames = all.map((t: any) => String(t?.name ?? "")).filter(Boolean);
+    } catch {
+      knownNames = undefined;
+    }
+
+    const calls = filterKnownTools(parseTextToolCalls(text), knownNames);
     if (calls.length === 0) return;
 
     const liquidCalls = calls.filter((c) => c.format === "liquid");

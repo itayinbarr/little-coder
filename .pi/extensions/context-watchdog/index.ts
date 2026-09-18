@@ -1,4 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  estimateContextTokens,
+  looksTruncated,
+  reconcileUsage,
+  reportsPostTruncationInput,
+} from "./local-estimate.ts";
 
 // Mid-run context watchdog (issue #59).
 //
@@ -255,8 +261,41 @@ export default function (pi: ExtensionAPI) {
     if (outstanding === 0) compacting = false;
   });
 
+  // Told once per session when a provider's reported input turns out to be
+  // post-truncation. Every turn would repeat it, and the user can only act on
+  // it once (raise num_ctx, or accept the earlier compaction).
+  let truncationNotified = false;
+
+  /** Usage as the watchdog should read it: the provider's figure, except where
+   *  that provider is known to measure the prompt AFTER truncating it, in which
+   *  case a local measurement of what is actually in context wins (issue #128). */
+  function readUsage(ctx: any): ContextUsageLike | undefined {
+    const reported = ctx.getContextUsage?.();
+    if (!reportsPostTruncationInput(ctx?.model?.provider)) return reported;
+    let estimated = 0;
+    try {
+      estimated = estimateContextTokens(
+        ctx.sessionManager?.buildContextEntries?.(),
+        ctx.getSystemPrompt?.(),
+      );
+    } catch {
+      return reported; // an estimate we could not take is not a reason to misbehave
+    }
+    if (!truncationNotified && looksTruncated(reported?.tokens ?? null, estimated)) {
+      truncationNotified = true;
+      ctx.ui?.notify?.(
+        `this provider reports its prompt size AFTER truncating it, so the usage readout ` +
+          `understates the context (reported ~${reported?.tokens}, actually ~${estimated} tokens). ` +
+          `Compaction is now driven by a local measurement instead. Raise the model's num_ctx if ` +
+          `you want the whole conversation to reach it (issue #128).`,
+        "warning",
+      );
+    }
+    return reconcileUsage(reported, estimated, true);
+  }
+
   pi.on("turn_start", async (_event, ctx) => {
-    const usage = ctx.getContextUsage?.();
+    const usage = readUsage(ctx);
 
     // (1) Measure the last compaction's effect the first time usage is known
     // again (it reads null right after compaction, until a post-compaction

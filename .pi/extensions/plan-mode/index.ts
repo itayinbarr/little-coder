@@ -85,15 +85,16 @@ function setIndicator(ctx: any, on: boolean): void {
 }
 
 // Whether the session should open already in plan mode (issue #84). Set by the
-// launcher when `--plan-mode` (or LITTLE_CODER_PLAN_MODE=1) is passed. Honored
-// for interactive sessions only — never a headless `--mode`/`-p` run or a
-// read-only sub-coder, which inherit the parent's env but must not plan.
+// launcher when `--plan-mode` (or LITTLE_CODER_PLAN_MODE=1) is passed.
+//
+// A headless run used to be excluded outright, because the flow's middle is a
+// dialog. Since v1.20.0 it is not: `-p` with `--plan-mode` runs the same flow
+// under the batch policy above and writes the plan to `.pi/approved-plan.md`
+// for a later `/implement` (issue #95). A sub-coder is still excluded: it
+// inherits the parent's env, and its job is to report, not to plan.
 export function wantsPlanModeAtStart(): boolean {
   if (process.env.LITTLE_CODER_PLAN_MODE !== "1") return false;
-  if (process.env.LITTLE_CODER_SUBAGENT === "1") return false;
-
-  const argv = process.argv;
-  return !argv.includes("--mode") && !argv.includes("-p");
+  return process.env.LITTLE_CODER_SUBAGENT !== "1";
 }
 
 // Pull the first balanced JSON array out of a model reply (small models love to
@@ -425,6 +426,56 @@ export async function handleImplement(deps: ImplementDeps): Promise<void> {
 
 const OTHER_SENTINEL = "✎ Other (type my own answer)";
 
+// ---------------------------------------------------------------------------
+// issue #95: batch (`-p`) planning
+// ---------------------------------------------------------------------------
+//
+// @cal101's workflow: a local model is a slow shared resource, so jobs are
+// queued, run sequentially in the background, and their output checked
+// asynchronously. Plan Mode could not take part, because its middle is
+// interactive (research, then 1-3 clarifying questions asked through the TUI,
+// then synthesis), and under `-p` there is nobody to ask.
+//
+// Of the three policies that make sense (skip the questions; pre-supply the
+// answers from a file; two-phase, stopping after the questions), this ships the
+// first. It is the only one that survives an unattended queue: pre-supplied
+// answers require the question set to be deterministic across runs, which it is
+// not, and a two-phase run is by definition not unattended.
+//
+// "Skip" here does not mean discard. The questions are generated exactly as
+// before and handed to the synthesis turn with the research digest, to be
+// resolved from the research and the assumption STATED in the plan. That costs
+// no extra model call, which matters at 4-7 tok/s, and it puts the
+// assumptions where a batch user can actually review them: in the artifact,
+// rather than in a dialog nobody saw.
+
+/** Whether this run has a human to ask. `-p` / `--mode json` / `--mode rpc` do
+ *  not; the TUI does. Reads ctx.mode, which pi sets per run, rather than argv,
+ *  so a session that is headless for any reason behaves consistently. */
+export function isBatchRun(mode: unknown): boolean {
+  return mode !== undefined && mode !== "tui";
+}
+
+/** The answers block handed to synthesis when there was nobody to ask.
+ *
+ *  Phrased as an instruction rather than as fabricated answers on purpose: a
+ *  plan whose assumptions are invisible is worse than one that never asked,
+ *  and a batch user's whole reason for reading the artifact is to find out what
+ *  the model decided on their behalf. */
+export function batchAnswers(questions: Question[]): string {
+  if (questions.length === 0) return "(no clarifying questions)";
+  return (
+    "This is an unattended batch run, so these clarifying questions could not be asked. " +
+    "Answer each one yourself from the research findings above, choose the most reasonable " +
+    "option, and open the plan with an **Assumptions** section that states what you decided " +
+    "for each and why. Where the research does not settle a question, say so explicitly " +
+    "rather than picking silently.\n\n" +
+    questions
+      .map((q, i) => `${i + 1}. ${q.q}\n   Options considered: ${q.options.join(" | ")}`)
+      .join("\n")
+  );
+}
+
 async function askQuestions(
   ctx: any,
   questions: Question[],
@@ -467,10 +518,28 @@ async function askQuestions(
   return answered.join("\n\n");
 }
 
+/**
+ * Run the research → questions → synthesis flow.
+ *
+ * `delivery` is the difference between the two run shapes, and it is a real
+ * one. Interactively, the input that triggered plan mode is swallowed
+ * (`action: "handled"`) and the orchestration runs detached, ending by sending
+ * the prompt back in for the synthesis turn, since the dialogs need the agent idle.
+ *
+ * Under `-p` that shape cannot work: pi's print mode awaits ONE
+ * `session.prompt()` and then reads the run's verdict off the last message, so
+ * a swallowed input returns immediately and the process tears down while the
+ * orchestration is still running (the same hazard as issue #115). So a batch
+ * run AWAITS the research inside the input handler and then lets the original
+ * input through untouched: `pendingSynthesis` is already armed, so the ordinary
+ * agent turn pi was about to run IS the synthesis turn, inside the await print
+ * mode is already holding. One prompt in, one plan out.
+ */
 async function orchestrate(
   pi: ExtensionAPI,
   ctx: any,
   prompt: string,
+  delivery: "sendUserMessage" | "passthrough" = "sendUserMessage",
 ): Promise<void> {
   orchestrating = true;
 
@@ -593,8 +662,9 @@ async function orchestrate(
     status.stop();
     dropEsc();
 
-    const answers =
-      questions.length > 0
+    const answers = isBatchRun((ctx as any).mode)
+      ? batchAnswers(questions)
+      : questions.length > 0
         ? await askQuestions(ctx, questions)
         : "(no clarifying questions)";
 
@@ -611,7 +681,7 @@ async function orchestrate(
 
     ctx.ui?.notify?.("plan mode: writing the plan…", "info");
 
-    pi.sendUserMessage(prompt);
+    if (delivery === "sendUserMessage") pi.sendUserMessage(prompt);
   } catch (e) {
     ctx.ui?.notify?.(
       `plan mode failed: ${(e as Error)?.message ?? e}`,
@@ -708,6 +778,12 @@ export default function (pi: ExtensionAPI) {
       };
     }
 
+    if (isBatchRun((ctx as any).mode)) {
+      // Await it, and do NOT swallow the input: see orchestrate's note.
+      await orchestrate(pi, ctx, text, "passthrough");
+      return;
+    }
+
     // Fire-and-forget: returning {handled} suppresses the normal turn; the
     // orchestration (dialogs, sub-coders, final synthesis) runs after.
     void orchestrate(pi, ctx, text);
@@ -782,18 +858,29 @@ export default function (pi: ExtensionAPI) {
     const messages = (_event as any).messages ?? [];
     const planText = extractPlanText(messages);
 
+    // A batch run has nobody to approve the plan, and a plan that exists only
+    // in stdout is not the artifact @cal101 asked for: the point of the queue
+    // is that `/implement` (or the next job) can pick it up. So the batch path
+    // persists it and says where. The plan is still printed, so a `-p` caller
+    // that only wants the text gets it exactly as before.
+    const batch = isBatchRun((ctx as any).mode);
+
     let choice: string | undefined;
 
-    try {
-      choice = await (ctx as any).ui?.select?.(
-        "Plan ready — approve it?",
-        [
-          APPROVE_CHOICE,
-          KEEP_PLANNING_CHOICE,
-        ],
-      );
-    } catch {
-      choice = undefined;
+    if (batch) {
+      choice = APPROVE_CHOICE;
+    } else {
+      try {
+        choice = await (ctx as any).ui?.select?.(
+          "Plan ready — approve it?",
+          [
+            APPROVE_CHOICE,
+            KEEP_PLANNING_CHOICE,
+          ],
+        );
+      } catch {
+        choice = undefined;
+      }
     }
 
     const planFile = join(

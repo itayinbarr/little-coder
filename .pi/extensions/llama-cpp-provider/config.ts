@@ -35,12 +35,31 @@ export interface ProviderEntry {
 
 export interface ModelsFile {
   providers: Record<string, ProviderEntry>;
+  /** "provider/id" of the model a bare launch selects. Read by the launcher for
+   *  the default-model decision, and by the context probe: behind a router the
+   *  probe has to ask about the model the user actually declared, not whichever
+   *  one happens to sit at array index 0 (issue #121). */
+  default?: string;
 }
 
 export interface LoadResult {
   providers: Record<string, ProviderEntry>;
   /** Files that were attempted, in resolution order. Useful for diagnostics. */
   sources: { path: string; status: "ok" | "missing" | "invalid"; error?: string }[];
+  /** Merged top-level `default` ("provider/id"), user override winning. */
+  defaultRef?: string;
+}
+
+/** The model id a provider's declared default names, or undefined when the
+ *  default belongs to another provider (or nothing is declared). Splits on the
+ *  FIRST slash only: llama-swap preset ids routinely contain slashes
+ *  (`unsloth/Qwen3.6-35B-A3B-GGUF`), so splitting on every slash would mangle
+ *  exactly the ids this exists to look up. */
+export function defaultModelIdFor(providerName: string, defaultRef: string | undefined): string | undefined {
+  if (!defaultRef) return undefined;
+  const slash = defaultRef.indexOf("/");
+  if (slash < 0) return undefined;
+  return defaultRef.slice(0, slash) === providerName ? defaultRef.slice(slash + 1) : undefined;
 }
 
 /** Provider env knob: if set, overrides the provider's baseUrl. Originally a
@@ -153,8 +172,10 @@ export function loadProviders(pkgRoot: string, env: NodeJS.ProcessEnv = process.
   const defaultPath = join(pkgRoot, "models.json");
   const defaultRead = readIfPresent(defaultPath);
   let pkgDefault: Record<string, ProviderEntry> = {};
+  let pkgDefaultRef: string | undefined;
   if (defaultRead.kind === "ok") {
     pkgDefault = defaultRead.data.providers;
+    pkgDefaultRef = typeof defaultRead.data.default === "string" ? defaultRead.data.default : undefined;
     sources.push({ path: defaultPath, status: "ok" });
   } else if (defaultRead.kind === "missing") {
     sources.push({ path: defaultPath, status: "missing" });
@@ -164,10 +185,12 @@ export function loadProviders(pkgRoot: string, env: NodeJS.ProcessEnv = process.
 
   const overridePath = resolveOverridePath(env);
   let userOverride: Record<string, ProviderEntry> | undefined;
+  let userDefault: string | undefined;
   if (overridePath) {
     const userRead = readIfPresent(overridePath);
     if (userRead.kind === "ok") {
       userOverride = userRead.data.providers;
+      userDefault = typeof userRead.data.default === "string" ? userRead.data.default : undefined;
       sources.push({ path: overridePath, status: "ok" });
     } else if (userRead.kind === "missing") {
       sources.push({ path: overridePath, status: "missing" });
@@ -178,7 +201,7 @@ export function loadProviders(pkgRoot: string, env: NodeJS.ProcessEnv = process.
 
   const merged = mergeProviders(pkgDefault, userOverride);
   const withEnv = applyEnvOverrides(merged, env);
-  return { providers: withEnv, sources };
+  return { providers: withEnv, sources, defaultRef: userDefault ?? pkgDefaultRef };
 }
 
 // ── live context-window detection (llama.cpp /props) ────────────────────────
@@ -205,12 +228,48 @@ export function contextWindowFromProps(json: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** Re-stamp every model with a new context window (keeps all other fields). */
+/** Re-stamp every model with a new context window (keeps all other fields).
+ *
+ *  Correct for a DIRECT llama.cpp server, which serves exactly one model, so
+ *  its `/props` n_ctx is that model's window and there is nothing else to get
+ *  wrong. Behind a router it is not: see `withPerModelContextWindows`. */
 export function withContextWindow(
   models: ProviderModelEntry[],
   contextWindow: number,
 ): ProviderModelEntry[] {
   return models.map((m) => ({ ...m, contextWindow }));
+}
+
+/** Re-stamp each model with ITS OWN window, read from a router's `/v1/models`
+ *  listing; a model the listing does not know keeps its declared window.
+ *
+ *  Issue #121 (@araujoigor): a llama-swap setup with 64k / 128k / 256k presets
+ *  of the same model got ONE probed number stamped onto all of them by
+ *  `withContextWindow`, so the 128k and 256k entries registered as 64k and
+ *  compacted far too early. The window is not a readout: it drives read-guard
+ *  truncation and the whole context budget. Nothing was logged either, because
+ *  the probe "succeeded". Per-model data was in the listing the whole time.
+ *
+ *  Deliberately no blanket fallback: a router that cannot tell us a model's
+ *  window leaves the declared value in place, which is a number the user chose,
+ *  rather than another model's measurement. */
+export function withPerModelContextWindows(
+  models: ProviderModelEntry[],
+  listJson: unknown,
+): ProviderModelEntry[] {
+  return models.map((m) => {
+    const own = contextWindowFromModelList(listJson, m.id);
+    return own ? { ...m, contextWindow: own } : m;
+  });
+}
+
+/** True when a `/v1/models` listing describes a ROUTER (more than one model
+ *  served) rather than an ordinary single-model llama.cpp server. The same
+ *  test model discovery uses, so the two can never disagree about what a
+ *  router is. */
+export function isRouterListing(json: unknown): boolean {
+  const data = (json as { data?: unknown[] } | null)?.data;
+  return Array.isArray(data) && data.length > 1;
 }
 
 /** Human "Nk" label for a context window. llama.cpp n_ctx values are ×1024
@@ -381,6 +440,28 @@ export async function probeServedModels(
     return discoveredModels(await res.json(), declared, fallbackWindow);
   } catch {
     return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Fetch `<root>/v1/models` and return the parsed JSON, or undefined on any
+ *  failure. The derivations over it (`contextWindowFromModelList`,
+ *  `withPerModelContextWindows`, `discoveredModels`) are pure, so one fetch
+ *  now answers what used to cost three round trips against the same endpoint. */
+export async function fetchModelList(baseUrl: string, deps: ProbeDeps = {}): Promise<unknown | undefined> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const root = baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+  const headers: Record<string, string> = {};
+  if (deps.apiKey) headers.Authorization = `Bearer ${deps.apiKey}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), deps.timeoutMs ?? 1500);
+  try {
+    const res = await fetchImpl(`${root}/v1/models`, { signal: ctrl.signal, headers });
+    if (!res.ok) return undefined;
+    return await res.json();
+  } catch {
+    return undefined;
   } finally {
     clearTimeout(timer);
   }

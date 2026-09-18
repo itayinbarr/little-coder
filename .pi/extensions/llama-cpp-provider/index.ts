@@ -2,13 +2,19 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  contextWindowFromModelList,
+  defaultModelIdFor,
+  discoveredModels,
+  fetchModelList,
   formatContextWindow,
+  isRouterListing,
   loadProviders,
+  probeContextWindow,
   probeContextWindowAuto,
-  probeServedModels,
   resolveApiKey,
   windowChange,
   withContextWindow,
+  withPerModelContextWindows,
   type ProviderModelEntry,
 } from "./config.ts";
 
@@ -66,26 +72,46 @@ export default async function (pi: ExtensionAPI) {
     // llama-swap router answers /v1/models per-model instead. Any failure
     // silently keeps the declared window, so this never breaks startup.
     if (!probeDisabled && name === "llamacpp" && entry.models.length > 0) {
-      const probed = await probeContextWindowAuto(entry.baseUrl, {
-        ...probeOpts(resolveApiKey(entry.apiKey)),
-        modelId: entry.models[0]?.id, // router mode: match this id in /v1/models
-      });
-      if (probed) {
-        models = withContextWindow(entry.models, probed);
-      }
+      const opts = probeOpts(resolveApiKey(entry.apiKey));
+      // The model the USER declared as default, not whichever one sits at array
+      // index 0. Behind a router those differ routinely -- @araujoigor listed a
+      // 64k preset first and made the 128k one the default -- and the probe was
+      // asking about the wrong model (issue #121).
+      const defaultId = defaultModelIdFor(name, result.defaultRef) ?? entry.models[0]?.id;
 
-      // Router mode also serves models that models.json has never heard of, and
-      // selecting one failed with "model not found" because it was never
-      // registered (issue #112). Discovery only ADDS ids the endpoint really
-      // serves, and only when it lists more than one -- a single-model server is
-      // the ordinary local case where models.json's alias is the better name.
-      const discovered = await probeServedModels(
-        entry.baseUrl,
-        models,
-        models[0]?.contextWindow ?? 32768,
-        probeOpts(resolveApiKey(entry.apiKey)),
-      );
-      if (discovered.length > 0) models = [...models, ...discovered];
+      // A DIRECT llama.cpp server answers /props with the n_ctx of the one
+      // model it serves, so that number is every model's window here.
+      const fromProps = await probeContextWindow(entry.baseUrl, opts);
+      if (fromProps) {
+        models = withContextWindow(entry.models, fromProps);
+      } else {
+        // Router mode. One fetch answers all three questions below.
+        const listing = await fetchModelList(entry.baseUrl, opts);
+        if (listing !== undefined) {
+          if (isRouterListing(listing)) {
+            // Each preset carries its own --ctx-size / meta.n_ctx. Stamping one
+            // probed value across all of them is what silently mis-sized the
+            // budget for every model but one (issue #121).
+            models = withPerModelContextWindows(entry.models, listing);
+          } else {
+            const single = contextWindowFromModelList(listing, defaultId);
+            if (single) models = withContextWindow(entry.models, single);
+          }
+
+          // Router mode also serves models that models.json has never heard of,
+          // and selecting one failed with "model not found" because it was
+          // never registered (issue #112). Discovery only ADDS ids the endpoint
+          // really serves, and only when it lists more than one -- a
+          // single-model server is the ordinary local case where models.json's
+          // alias is the better name.
+          const discovered = discoveredModels(
+            listing,
+            models,
+            models.find((m) => m.id === defaultId)?.contextWindow ?? models[0]?.contextWindow ?? 32768,
+          );
+          if (discovered.length > 0) models = [...models, ...discovered];
+        }
+      }
     }
 
     pi.registerProvider(name, {
@@ -101,7 +127,11 @@ export default async function (pi: ExtensionAPI) {
         apiKey: entry.apiKey,
         api: entry.api,
         models,
-        registeredCtx: models[0]?.contextWindow,
+        // The window we believe the ACTIVE model has. models[0] was only ever
+        // right by coincidence once per-model windows became possible (#121).
+        registeredCtx:
+          models.find((m) => m.id === defaultModelIdFor(name, result.defaultRef))?.contextWindow ??
+          models[0]?.contextWindow,
       };
     }
   }
@@ -122,15 +152,22 @@ export default async function (pi: ExtensionAPI) {
       const model = (event as any).model;
       const previous = (event as any).previousModel;
       if (!model || model.provider !== "llamacpp" || !previous) return;
+      // A model we never registered has no window of ours to update, and
+      // comparing the probe against some OTHER model's window would emit a
+      // "context window updated" notice for a change that did not happen.
+      const current = lc.models.find((m) => m.id === model.id);
+      if (!current) return;
 
       const probed = await probeContextWindowAuto(lc.baseUrl, {
         ...probeOpts(resolveApiKey(lc.apiKey)),
         modelId: model.id,
       });
-      const change = windowChange(lc.registeredCtx, probed);
+      const change = windowChange(current.contextWindow, probed);
       if (!change) return;
 
-      lc.models = withContextWindow(lc.models, change.to);
+      // Only the model being selected: its siblings behind a router have their
+      // own windows, and #121 is exactly what blanket re-stamping causes.
+      lc.models = lc.models.map((m) => (m.id === model.id ? { ...m, contextWindow: change.to } : m));
       lc.registeredCtx = change.to;
       pi.registerProvider("llamacpp", {
         baseUrl: lc.baseUrl,

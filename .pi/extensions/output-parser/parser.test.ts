@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { repairJson, parseTextToolCalls, parseLiquidToolCalls, escapeNewlinesInJsonStrings, firstBalancedObject } from "./parser.ts";
+import {
+  repairJson,
+  parseTextToolCalls,
+  parseLiquidToolCalls,
+  escapeNewlinesInJsonStrings,
+  firstBalancedObject,
+  filterKnownTools,
+} from "./parser.ts";
 
 describe("firstBalancedObject", () => {
   it("returns the OUTER object even when it nests further objects", () => {
@@ -260,5 +267,54 @@ describe("parseLiquidToolCalls (LFM2 / Liquid Pythonic format)", () => {
 
   it("does not fire on a function-call-looking phrase mid-sentence (no tokens, not whole-message)", () => {
     expect(parseLiquidToolCalls("then I called Read(path='/a') to inspect it")).toEqual([]);
+  });
+});
+
+// ── issue #96: false-positive tool-call detection ──────────────────────────
+describe("filterKnownTools (issue #96)", () => {
+  const TOOLS = ["read", "write", "edit", "bash", "grep", "ShellStart"];
+
+  it("drops @cal101's case: a name the session has no tool for", () => {
+    const calls = parseTextToolCalls('Here is the shape: {"name": "myCustomAction", "enabled": true}');
+    expect(calls.map((c) => c.name)).toContain("myCustomAction");
+    // The nudge asks the model to re-issue it natively; nothing can.
+    expect(filterKnownTools(calls, TOOLS)).toEqual([]);
+  });
+
+  it("keeps a real tool written as text, which is a genuine slip", () => {
+    const calls = parseTextToolCalls('{"name": "read", "arguments": {"path": "foo.py"}}');
+    const kept = filterKnownTools(calls, TOOLS);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].name).toBe("read");
+  });
+
+  it("matches the capitalisation models actually emit", () => {
+    const calls = parseTextToolCalls('{"name": "Write", "input": {"path": "a.txt", "content": "x"}}');
+    expect(filterKnownTools(calls, TOOLS)).toHaveLength(1);
+  });
+
+  it("filters nothing when the tool list could not be read", () => {
+    // Guessing here would silently drop real recoveries, which is the worse
+    // failure of the two.
+    const calls = parseTextToolCalls('{"name": "myCustomAction", "enabled": true}');
+    expect(filterKnownTools(calls, undefined)).toHaveLength(1);
+    expect(filterKnownTools(calls, [])).toHaveLength(1);
+  });
+
+  it("never filters a Liquid call, since its diagnostic is about the channel", () => {
+    const calls = parseTextToolCalls("<|tool_call_start|>[SomethingUnknown(x='1')]<|tool_call_end|>");
+    expect(calls.map((c) => c.format)).toEqual(["liquid"]);
+    // The --jinja advice is right whatever the tool was called.
+    expect(filterKnownTools(calls, TOOLS)).toHaveLength(1);
+  });
+
+  it("a fenced json block of unrelated config is no longer an intervention", () => {
+    const prose = [
+      "The manifest looks like this:",
+      "```json",
+      '{"name": "my-package", "version": "1.0.0"}',
+      "```",
+    ].join("\n");
+    expect(filterKnownTools(parseTextToolCalls(prose), TOOLS)).toEqual([]);
   });
 });

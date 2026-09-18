@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import {
+  subCoderAccess,
   runSubCoder,
   runSubCodersConcurrent,
   truncateReport,
@@ -50,11 +51,18 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "dispatch",
     label: "Dispatch sub-coder",
+    // The description has to state the child's actual powers, not the default
+    // ones: a model told children "CANNOT edit or write files" will not
+    // delegate work that needs an edit, even when the user has enabled it
+    // (issue #93).
     description: [
       "Dispatch one or more isolated sub-coders to research a focused question.",
       "Each runs in its own context window, can read the repo and browse online",
-      "(read, grep, glob, webfetch, websearch, browser, read-only bash) but CANNOT",
-      "edit or write files. Each returns a concise report. Use this to gather",
+      "(read, grep, glob, webfetch, websearch, browser, read-only bash)",
+      subCoderAccess() === "write"
+        ? "and CAN edit and write files, but CANNOT dispatch further sub-coders."
+        : "but CANNOT edit or write files.",
+      "Each returns a concise report. Use this to gather",
       "information without cluttering your own context.",
       "Single: { task }. Parallel: { tasks: [{ label, task }] } (max 4).",
     ].join(" "),

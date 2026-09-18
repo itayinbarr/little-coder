@@ -10,6 +10,10 @@ import {
   mergeProviders,
   resolveOverridePath,
   propsUrlFor,
+  defaultModelIdFor,
+  withPerModelContextWindows,
+  isRouterListing,
+  fetchModelList,
   contextWindowFromModelList,
   discoveredModels,
   contextWindowFromProps,
@@ -558,5 +562,120 @@ describe("discoveredModels (router mode, issue #112)", () => {
     const m = discoveredModels(router, declared, 32768)[0];
     expect(m).toMatchObject({ name: "LFM2.5-8B-A1B-GGUF", reasoning: false, input: ["text"], maxTokens: 4096 });
     expect(m.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+  });
+});
+
+// ── issue #121: the probe must ask about the DECLARED default, and a router's
+// per-model windows must survive registration ──────────────────────────────
+describe("router-mode context windows (issue #121)", () => {
+  // @araujoigor's setup: three presets of one model, the 64k listed first and
+  // the 128k declared as the default.
+  const LISTING = {
+    data: [
+      { id: "qwen-64k", status: { args: ["--ctx-size", "65536"] } },
+      { id: "qwen-128k", meta: { n_ctx: 131072 } },
+      { id: "qwen-256k", status: { args: ["--ctx-size", "262144"] } },
+    ],
+  };
+  const declared = [
+    fillModelDefaults({ id: "qwen-64k" }, "llamacpp", 0),
+    fillModelDefaults({ id: "qwen-128k" }, "llamacpp", 1),
+    fillModelDefaults({ id: "qwen-256k" }, "llamacpp", 2),
+  ];
+
+  describe("defaultModelIdFor", () => {
+    it("returns the id when the default names this provider", () => {
+      expect(defaultModelIdFor("llamacpp", "llamacpp/qwen-128k")).toBe("qwen-128k");
+    });
+
+    it("returns undefined for another provider's default", () => {
+      expect(defaultModelIdFor("ollama", "llamacpp/qwen-128k")).toBeUndefined();
+    });
+
+    it("keeps slashes in the model id, because llama-swap preset ids have them", () => {
+      expect(defaultModelIdFor("llamacpp", "llamacpp/unsloth/Qwen3.6-35B-A3B-GGUF")).toBe(
+        "unsloth/Qwen3.6-35B-A3B-GGUF",
+      );
+    });
+
+    it("tolerates a missing or malformed default", () => {
+      expect(defaultModelIdFor("llamacpp", undefined)).toBeUndefined();
+      expect(defaultModelIdFor("llamacpp", "no-slash-here")).toBeUndefined();
+    });
+  });
+
+  it("loadProviders carries the top-level default through", () => {
+    const dir = mkdtempSync(join(tmpdir(), "lc-default-"));
+    try {
+      writeFileSync(
+        join(dir, "models.json"),
+        JSON.stringify({ default: "llamacpp/qwen-128k", providers: { llamacpp: { api: "openai-completions", baseUrl: "http://x/v1", apiKey: "K", models: [{ id: "qwen-64k" }] } } }),
+      );
+      expect(loadProviders(dir, {}).defaultRef).toBe("llamacpp/qwen-128k");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stamps each model with its OWN window, not one value across all three", () => {
+    const out = withPerModelContextWindows(declared, LISTING);
+    expect(out.map((m) => [m.id, m.contextWindow])).toEqual([
+      ["qwen-64k", 65536],
+      ["qwen-128k", 131072],
+      ["qwen-256k", 262144],
+    ]);
+  });
+
+  it("this is the bug: blanket stamping shrinks the 128k and 256k models to 64k", () => {
+    // The old path probed models[0] (the 64k preset) and stamped every model
+    // with the result, which is why the default compacted at half its window.
+    const wrong = withContextWindow(declared, 65536);
+    expect(wrong.every((m) => m.contextWindow === 65536)).toBe(true);
+  });
+
+  it("leaves a model the router does not describe on its declared window", () => {
+    const withUnknown = [...declared, fillModelDefaults({ id: "not-served", contextWindow: 8192 }, "llamacpp", 3)];
+    const out = withPerModelContextWindows(withUnknown, LISTING);
+    // No blanket fallback: a number the user chose beats another model's reading.
+    expect(out.find((m) => m.id === "not-served")?.contextWindow).toBe(8192);
+  });
+
+  describe("isRouterListing", () => {
+    it("more than one served model is a router", () => {
+      expect(isRouterListing(LISTING)).toBe(true);
+    });
+
+    it("one model is an ordinary local server, not a router", () => {
+      expect(isRouterListing({ data: [{ id: "only" }] })).toBe(false);
+    });
+
+    it("garbage is not a router", () => {
+      expect(isRouterListing(null)).toBe(false);
+      expect(isRouterListing({})).toBe(false);
+    });
+  });
+
+  describe("fetchModelList", () => {
+    it("returns the parsed listing and sends the key as a Bearer token", async () => {
+      let seen: any;
+      const json = await fetchModelList("http://h:1/v1", {
+        apiKey: "sk-x",
+        fetchImpl: (async (_u: string, init: any) => {
+          seen = init;
+          return { ok: true, json: async () => LISTING };
+        }) as any,
+      });
+      expect(json).toEqual(LISTING);
+      expect(seen.headers.Authorization).toBe("Bearer sk-x");
+    });
+
+    it("returns undefined rather than throwing when the server is down", async () => {
+      const json = await fetchModelList("http://h:1/v1", {
+        fetchImpl: (async () => {
+          throw new Error("ECONNREFUSED");
+        }) as any,
+      });
+      expect(json).toBeUndefined();
+    });
   });
 });
