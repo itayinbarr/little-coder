@@ -95,6 +95,13 @@ describe("permission-gate tool_call interceptor", () => {
     return handler;
   }
 
+  // Fresh handler that owns its own edit-confirmer instance. Used by the
+  // write/edit "apply-all" tests so the latch does not leak into the shell
+  // tests or across randomized ordering.
+  function freshEditHandler() {
+    return getHandler();
+  }
+
   async function withMode<T>(mode: string | undefined, fn: () => T | Promise<T>): Promise<T> {
     const prev = process.env.LITTLE_CODER_PERMISSION_MODE;
     if (mode === undefined) delete process.env.LITTLE_CODER_PERMISSION_MODE;
@@ -194,6 +201,149 @@ describe("permission-gate tool_call interceptor", () => {
       );
       expect(result?.block).toBe(true);
       expect(result.reason).toBe("command cancelled by user");
+    });
+  });
+
+  describe("manual mode prompts for write/edit tools (apply/deny/apply-all)", () => {
+    // One shared handler for the whole block so the "Apply all" latch (a
+    // per-instance flag inside createEditConfirmer) persists across the
+    // sequential tests — matching a single pi session. The handler is created
+    // once for this describe, not via the global getHandler(), so it cannot
+    // leak into other describes via caching or random test order.
+    const sharedHandler = freshEditHandler();
+    function handler() {
+      return sharedHandler;
+    }
+
+    it("prompts on a write of a new file and applies when user picks Apply", async () => {
+      await withMode("manual", async () => {
+        let prompted = false;
+        const result = await handler()(
+          { toolName: "write", input: { path: "/tmp/new.ts", content: "x" } },
+          {
+            ui: {
+              select: async () => {
+                prompted = true;
+                return "Apply";
+              },
+            },
+          },
+        );
+        expect(prompted).toBe(true);
+        expect(result).toBeUndefined();
+      });
+    });
+
+    it("prompts on an edit and blocks when user picks Deny", async () => {
+      await withMode("manual", async () => {
+        let prompted = false;
+        const result = await handler()(
+          { toolName: "edit", input: { path: "/tmp/exists.ts", edits: [] } },
+          {
+            ui: {
+              select: async () => {
+                prompted = true;
+                return "Deny";
+              },
+            },
+          },
+        );
+        expect(prompted).toBe(true);
+        expect(result?.block).toBe(true);
+        expect(result.reason).toBe("edit cancelled by user");
+      });
+    });
+
+    it("does not throw when notify is absent (headless manual)", async () => {
+      await withMode("manual", async () => {
+        const result = await handler()(
+          { toolName: "write", input: { path: "/tmp/new.ts", content: "x" } },
+          { ui: {} },
+        );
+        expect(result?.block).toBe(true);
+      });
+    });
+
+    it("reads file_path when path is absent", async () => {
+      await withMode("manual", async () => {
+        let prompted = false;
+        const result = await handler()(
+          { toolName: "write", input: { file_path: "/tmp/legacy.ts", content: "x" } },
+          {
+            ui: {
+              select: async () => {
+                prompted = true;
+                return "Apply";
+              },
+            },
+          },
+        );
+        expect(prompted).toBe(true);
+        expect(result).toBeUndefined();
+      });
+    });
+
+    it("blocks edits when no select UI is available (headless manual)", async () => {
+      await withMode("manual", async () => {
+        const result = await handler()(
+          { toolName: "write", input: { path: "/tmp/new.ts", content: "x" } },
+          { ui: {} },
+        );
+        expect(result?.block).toBe(true);
+        expect(result.reason).toBe("edit cancelled by user");
+      });
+    });
+
+    it("does not prompt for write/edit in auto mode (write-guard owns it)", async () => {
+      await withMode("auto", async () => {
+        let prompted = false;
+        const result = await handler()(
+          { toolName: "write", input: { path: "/tmp/new.ts", content: "x" } },
+          { ui: { select: async () => { prompted = true; return "Apply"; } } },
+        );
+        expect(prompted).toBe(false);
+        expect(result).toBeUndefined();
+      });
+    });
+
+    it("does not prompt for write/edit in accept-all mode", async () => {
+      await withMode("accept-all", async () => {
+        let prompted = false;
+        const result = await handler()(
+          { toolName: "edit", input: { path: "/tmp/x.ts", edits: [] } },
+          { ui: { select: async () => { prompted = true; return "Deny"; } } },
+        );
+        expect(prompted).toBe(false);
+        expect(result).toBeUndefined();
+      });
+    });
+
+    it("Apply all skips the prompt for every later edit in the session", async () => {
+      await withMode("manual", async () => {
+        let prompts = 0;
+        const ctx = {
+          ui: {
+            select: async () => {
+              prompts++;
+              return "Apply all (this session)";
+            },
+          },
+        };
+        const first = await handler()(
+          { toolName: "write", input: { path: "/tmp/a.ts", content: "x" } },
+          ctx,
+        );
+        expect(first).toBeUndefined();
+        expect(prompts).toBe(1);
+
+        // A subsequent edit must NOT prompt again.
+        const second = await handler()(
+          { toolName: "edit", input: { path: "/tmp/b.ts", edits: [] } },
+          ctx,
+        );
+        expect(second).toBeUndefined();
+        expect(prompts).toBe(1);
+      });
     });
   });
 
