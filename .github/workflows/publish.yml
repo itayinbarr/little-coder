@@ -120,11 +120,14 @@ jobs:
       # build below needs only the source tree.
       - run: npm ci --ignore-scripts
 
+      # The smoke test builds the package itself and deletes dist/ in its
+      # afterAll, so it has to run BEFORE the build whose output we publish.
+      # Running it in between removes the artifact the next step needs.
+      - name: Verify the package builds and is loadable
+        run: npx vitest run scripts/build-pi-package.test.mjs
+
       - name: Build pi package
         run: node scripts/build-pi-package.mjs
-
-      - name: Verify the built package is loadable
-        run: npx vitest run scripts/build-pi-package.test.mjs
 
       - name: Publish pi package to npm with provenance
         run: npm publish --provenance --access public
