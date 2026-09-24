@@ -9,6 +9,7 @@ import {
   type SubCoderResult,
 } from "./spawn.ts";
 import { SubCoderTracker } from "./tracker.ts";
+import { charWidth, visibleWidth } from "../_shared/width.ts";
 
 // The `dispatch` tool: the main little-coder spawns isolated child little-coder
 // sessions ("sub-coders") to research a focused question — they read the repo
@@ -256,21 +257,50 @@ function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, "");
 }
 
-/** Word-wrap plain text at whitespace; assumes long tokens are pre-chunked. */
+/** Split a word into pieces no wider than maxWidth display columns. */
+function splitByWidth(word: string, maxWidth: number): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  let width = 0;
+  for (const ch of word) {
+    const w = charWidth(ch);
+    if (width + w > maxWidth && current) {
+      pieces.push(current);
+      current = "";
+      width = 0;
+    }
+    current += ch;
+    width += w;
+  }
+  if (current) pieces.push(current);
+  return pieces;
+}
+
+/**
+ * Word-wrap plain text at whitespace, measuring display columns so CJK text
+ * (two columns per char, often with no spaces to break at) cannot overflow.
+ */
 function wrapPlainText(text: string, maxWidth: number): string[] {
-  if (text.length <= maxWidth) return [text];
-  const words = text.split(/\s+/);
+  if (visibleWidth(text) <= maxWidth) return [text];
+  const words = text.split(/\s+/).flatMap((word) =>
+    visibleWidth(word) > maxWidth ? splitByWidth(word, maxWidth) : [word],
+  );
   const result: string[] = [];
   let current = "";
+  let currentWidth = 0;
   for (const word of words) {
     if (!word) continue;
-    if (current.length === 0) {
+    const w = visibleWidth(word);
+    if (currentWidth === 0) {
       current = word;
-    } else if (current.length + 1 + word.length <= maxWidth) {
+      currentWidth = w;
+    } else if (currentWidth + 1 + w <= maxWidth) {
       current += " " + word;
+      currentWidth += 1 + w;
     } else {
       result.push(current);
       current = word;
+      currentWidth = w;
     }
   }
   if (current) result.push(current);
@@ -280,7 +310,7 @@ function wrapPlainText(text: string, maxWidth: number): string[] {
 /** Wrap one ANSI-aware line to width, re-applying any leading SGR prefix. */
 function wrapLine(line: string, width: number): string[] {
   const plain = stripAnsi(line);
-  if (plain.length <= width) return [line];
+  if (visibleWidth(plain) <= width) return [line];
   const { prefix } = extractAnsiPrefix(line);
   const wrappedLines = wrapPlainText(plain, width);
   return wrappedLines.map((l) => prefix + l);

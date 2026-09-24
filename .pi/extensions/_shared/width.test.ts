@@ -59,3 +59,19 @@ describe("truncateLineToWidth", () => {
     void honey; // keep import shape parity with the tracker
   });
 });
+
+describe("wide characters", () => {
+  it("counts CJK and fullwidth characters as two columns", () => {
+    expect(visibleWidth("中文")).toBe(4);
+    expect(visibleWidth("a中b")).toBe(4);
+    expect(visibleWidth("（全角）")).toBe(8);
+  });
+  it("counts combining marks as zero columns", () => {
+    expect(visibleWidth("é")).toBe(1);
+  });
+  it("truncates CJK text to the column budget", () => {
+    const out = truncateLineToWidth("研究报告：仓库实际位于子目录", 10);
+    expect(visibleWidth(out)).toBeLessThanOrEqual(10);
+    expect(stripAnsi(out).endsWith("…")).toBe(true);
+  });
+});
