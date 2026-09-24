@@ -20,12 +20,48 @@ export function stripAnsi(s: string): string {
   return s.replace(SGR_RE, "").replace(OSC_RE, "");
 }
 
-// Approximation: ANSI-stripped char count (treats every visible char as width
-// 1). Exact for ASCII / Latin / single-cell glyphs the tracker and status
-// widgets emit. Wide CJK or emoji *under*count here, so callers should leave a
-// small safety margin (see terminalColumns/SAFETY_MARGIN).
+// Terminal column width of one code point: 0 for combining marks and
+// zero-width characters, 2 for East Asian Wide/Fullwidth characters and
+// emoji, 1 otherwise. Mirrors wcwidth closely enough for pi-tui's
+// line-width check; CJK text counted as 1 column per char overflowed the
+// terminal and crashed pi.
+export function charWidth(ch: string): number {
+  const cp = ch.codePointAt(0) ?? 0;
+  if (cp === 0 || cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return 0;
+  if (
+    (cp >= 0x0300 && cp <= 0x036f) || // combining diacritics
+    (cp >= 0x200b && cp <= 0x200f) || // zero-width space/joiners, marks
+    (cp >= 0xfe00 && cp <= 0xfe0f) || // variation selectors
+    (cp >= 0xe0100 && cp <= 0xe01ef)
+  ) {
+    return 0;
+  }
+  if (
+    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
+    (cp >= 0x2e80 && cp <= 0x303e) || // CJK radicals, punctuation
+    (cp >= 0x3041 && cp <= 0x33ff) || // kana, CJK symbols
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Ext A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified
+    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
+    (cp >= 0xac00 && cp <= 0xd7a3) || // Hangul syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK compatibility
+    (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK compatibility forms
+    (cp >= 0xff00 && cp <= 0xff60) || // fullwidth forms
+    (cp >= 0xffe0 && cp <= 0xffe6) ||
+    (cp >= 0x1f300 && cp <= 0x1f64f) || // emoji
+    (cp >= 0x1f900 && cp <= 0x1f9ff) ||
+    (cp >= 0x20000 && cp <= 0x3fffd) // CJK Ext B+
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+// Display width of an ANSI-stripped string, in terminal columns.
 export function visibleWidth(s: string): number {
-  return [...stripAnsi(s)].length;
+  let w = 0;
+  for (const ch of stripAnsi(s)) w += charWidth(ch);
+  return w;
 }
 
 // Truncate `line` so its visible width fits `maxWidth`. ANSI escapes are
@@ -57,17 +93,20 @@ export function truncateLineToWidth(line: string, maxWidth: number, ellipsis = "
         continue;
       }
     }
-    if (visible >= cutAt) break;
-    out += ch;
-    visible += 1;
-    i += 1;
+    const cp = line.codePointAt(i) ?? 0;
+    const glyph = String.fromCodePoint(cp);
+    const w = charWidth(glyph);
+    if (visible + w > cutAt) break;
+    out += glyph;
+    visible += w;
+    i += glyph.length;
   }
   return out + ellipsis + "\x1b[0m";
 }
 
-// Current terminal width, with a small safety margin to absorb wide Unicode
-// chars that visibleWidth's char-count approximation under-measures. Falls
-// back to `fallback` columns when stdout isn't a TTY (headless runs).
+// Current terminal width, with a small safety margin for glyphs whose
+// rendered width differs from charWidth's table (ambiguous-width symbols,
+// newer emoji). Falls back to `fallback` columns when stdout isn't a TTY.
 const SAFETY_MARGIN = 2;
 export function terminalColumns(fallback = 80): number {
   const c = (process.stdout && (process.stdout as any).columns) | 0;
