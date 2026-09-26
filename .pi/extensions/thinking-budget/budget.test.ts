@@ -183,6 +183,22 @@ describe("thinking-budget recovery (issue #8)", () => {
     expect(h.level()).toBe("medium");
   });
 
+  it("extension-sourced input (our own recovery nudge) does not restore the thinking level", async () => {
+    const h = makeHarness("medium");
+    setupExtension(h.pi as any);
+    await startRun(h);
+    await fire(h.pi, "message_update", thinkingDelta("x".repeat(1000)), h.ctx); // breach
+    expect(h.level()).toBe("off");
+
+    // The nudge itself re-enters the input pipeline tagged source: "extension".
+    await fire(h.pi, "input", { text: "nudge", source: "extension" }, h.ctx);
+    expect(h.level()).toBe("off");
+
+    // A real user prompt still ends the forced-off window afterward.
+    await fire(h.pi, "input", { text: "next task", source: "interactive" }, h.ctx);
+    expect(h.level()).toBe("medium");
+  });
+
   it("a fresh task (no prior breach) is never forced off", async () => {
     const h = makeHarness("low");
     setupExtension(h.pi as any);

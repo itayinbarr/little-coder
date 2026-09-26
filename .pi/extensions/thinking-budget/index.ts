@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, InputEvent } from "@earendil-works/pi-coding-agent";
 import { harnessIntervention } from "../_shared/intervention.ts";
 
 // pi's thinking-level union (not re-exported from the package root). Mirrors
@@ -103,9 +103,11 @@ export default function (pi: ExtensionAPI) {
   });
 
   // A genuinely new user prompt ends the "forced off" window: restore the
-  // level the user actually had before the breach. Programmatic follow-ups
-  // (our nudge) do not emit an `input` event, so the restart turn stays off.
-  pi.on("input", async () => {
+  // level the user actually had before the breach. Our own recovery nudge
+  // (sendUserMessage) also fires `input`, tagged `source: "extension"` —
+  // skip those so the restart turn stays off until a real prompt arrives.
+  pi.on("input", async (event: InputEvent) => {
+    if (event?.source === "extension") return;
     if (forcedOff) {
       if (priorLevel !== undefined) safeSetThinkingLevel(pi, priorLevel);
       forcedOff = false;
