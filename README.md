@@ -207,6 +207,8 @@ Merge semantics: each top-level provider key in your override file **fully repla
 
 **Per-phase models.** `/plan-model` and `/action-model` let planning and implementation run on different models — see [Per-phase model selection](#per-phase-model-selection) below.
 
+**Third-party configurations.** [Tsubasa](https://github.com/PalmAndWand/tsubasa-integrations/blob/main/guides/little-coder.md) maintains an external provider configuration and setup guide. It uses the user override file; endpoint, model limits and credentials remain the provider's responsibility.
+
 **Qwen3.8-27B (dense + MTP).** Added to the shipped registry in v1.17.0. It's the *quality* option on a small card, not the fast one — measured on an RTX 5070 Laptop (8GB) with `UD-Q4_K_XL`:
 
 | context | `-ngl` | tok/s | VRAM |
