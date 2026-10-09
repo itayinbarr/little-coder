@@ -197,15 +197,14 @@ describe("thinking-budget recovery (issue #8)", () => {
 describe("thinking-budget resolution", () => {
   afterEach(() => {
     delete process.env.LITTLE_CODER_THINKING_BUDGET;
+    delete process.env.LITTLE_CODER_BENCHMARK;
   });
 
-  it("a profile budget wins over the env budget", async () => {
-    process.env.LITTLE_CODER_THINKING_BUDGET = "10";
-    const h = makeHarness();
-    setupExtension(h.pi as any);
+  // Profile budget 100 tokens (~350 chars). 200 chars ≈ 58 tokens: under the
+  // profile budget, over an env budget of 10.
+  async function runWithProfileBudget(h: ReturnType<typeof makeHarness>) {
     await fire(h.pi, "session_start", {}, h.ctx);
     await fire(h.pi, "agent_start", {}, h.ctx);
-    // profile budget 100 tokens (~350 chars) overrides env's 10.
     await fire(
       h.pi,
       "before_agent_start",
@@ -213,8 +212,32 @@ describe("thinking-budget resolution", () => {
       h.ctx,
     );
     await fire(h.pi, "turn_start", {}, h.ctx);
-    // 200 chars ≈ 58 tokens — under the 100-token profile budget, over env's 10.
     await fire(h.pi, "message_update", thinkingDelta("x".repeat(200)), h.ctx);
+  }
+
+  it("the env budget wins over a profile budget", async () => {
+    process.env.LITTLE_CODER_THINKING_BUDGET = "10";
+    const h = makeHarness();
+    setupExtension(h.pi as any);
+    await runWithProfileBudget(h);
+    expect(h.calls).toContain("abort");
+    expect(h.notifies[0]).toMatch(/LITTLE_CODER_THINKING_BUDGET=10 overrides the profile's 100/);
+  });
+
+  it("a profile budget wins over the env budget in benchmark mode", async () => {
+    process.env.LITTLE_CODER_THINKING_BUDGET = "10";
+    process.env.LITTLE_CODER_BENCHMARK = "terminal_bench";
+    const h = makeHarness();
+    setupExtension(h.pi as any);
+    await runWithProfileBudget(h);
+    expect(h.calls).toEqual([]);
+  });
+
+  it("an invalid env budget falls back to the profile budget", async () => {
+    process.env.LITTLE_CODER_THINKING_BUDGET = "lots";
+    const h = makeHarness();
+    setupExtension(h.pi as any);
+    await runWithProfileBudget(h);
     expect(h.calls).toEqual([]);
   });
 });
