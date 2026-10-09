@@ -296,6 +296,8 @@ Set `id` to whatever model your server reports, and `baseUrl` to its `/v1` endpo
 
 `.pi/settings.json` is a separate concern: it controls per-model **profiles** (context_limit, thinking_budget, temperature, benchmark_overrides) referenced by the `<provider>/<id>` key. Profiles don't register or describe models — they only tune how little-coder runs against models that are already registered.
 
+To raise or lower the thinking cap without editing the profile, set `LITTLE_CODER_THINKING_BUDGET=<tokens>`. It overrides the profile's `thinking_budget` for interactive runs; when `LITTLE_CODER_BENCHMARK` is set the profile still wins, so benchmark numbers stay reproducible.
+
 ---
 
 ## Background jobs

@@ -54,6 +54,11 @@ let forcedOff = false;
 // The thinking level in effect when we first forced it off, restored on the
 // next user input so a new task is unaffected.
 let priorLevel: ThinkingLevel | undefined;
+let overrideNoticed = false;
+
+function positive(n: number): number | undefined {
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 function charsToTokens(chars: number): number {
   // Matches local/context_manager.estimate_tokens (len/3.5)
@@ -90,6 +95,7 @@ export default function (pi: ExtensionAPI) {
     aborted = false;
     forcedOff = false;
     priorLevel = undefined;
+    overrideNoticed = false;
   });
 
   // Hard reset of per-turn counters between agent runs. `forcedOff` /
@@ -115,15 +121,35 @@ export default function (pi: ExtensionAPI) {
     aborted = false;
   });
 
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
     const opts: any = (event as any).systemPromptOptions ?? {};
     const lc = opts.littleCoder ?? {};
-    const profileBudget = Number(lc.thinkingBudget);
-    const envBudget = Number(process.env.LITTLE_CODER_THINKING_BUDGET);
-    budgetForTurn =
-      (Number.isFinite(profileBudget) && profileBudget > 0 && profileBudget) ||
-      (Number.isFinite(envBudget) && envBudget > 0 && envBudget) ||
-      DEFAULT_BUDGET;
+    const profileBudget = positive(Number(lc.thinkingBudget));
+    const envBudget = positive(Number(process.env.LITTLE_CODER_THINKING_BUDGET));
+    // The shipped settings give every profile a budget, so the env var has to
+    // win to be of any use. Benchmark runs keep the profile's budget so
+    // benchmark_overrides stay reproducible.
+    if (process.env.LITTLE_CODER_BENCHMARK) {
+      budgetForTurn = profileBudget ?? envBudget ?? DEFAULT_BUDGET;
+      return;
+    }
+    budgetForTurn = envBudget ?? profileBudget ?? DEFAULT_BUDGET;
+    if (
+      envBudget !== undefined &&
+      profileBudget !== undefined &&
+      envBudget !== profileBudget &&
+      !overrideNoticed
+    ) {
+      overrideNoticed = true;
+      try {
+        ctx.ui.notify(
+          `thinking-budget: LITTLE_CODER_THINKING_BUDGET=${envBudget} overrides the profile's ${profileBudget}`,
+          "info",
+        );
+      } catch {
+        // best-effort
+      }
+    }
   });
 
   pi.on("turn_start", async () => {
