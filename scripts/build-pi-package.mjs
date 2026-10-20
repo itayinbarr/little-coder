@@ -152,6 +152,9 @@ const piPackageJson = {
 		"coding-agent",
 	],
 	files: ["extensions/", "skills/", "UPSTREAM.json", "README.md"],
+	dependencies: {
+		"@modelcontextprotocol/sdk": pkg.dependencies["@modelcontextprotocol/sdk"],
+	},
 	peerDependencies: {
 		"@earendil-works/pi-ai": "^0.83.0",
 		"@earendil-works/pi-coding-agent": "^0.83.0",

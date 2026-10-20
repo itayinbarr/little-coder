@@ -324,6 +324,28 @@ Urgency decides how the news arrives: a crash or an error-ish match interrupts t
 
 **Permissions.** `ShellStart` goes through the same whitelist as `bash`, so build and test commands usually need `LITTLE_CODER_BASH_ALLOW` (see [Permissions](#permissions)).
 
+## Web search and page fetching
+
+`websearch` uses DuckDuckGo by default, and `webfetch` reads URLs directly.
+To use [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+for both tools, launch with:
+
+```bash
+LITTLE_CODER_WEB_PROVIDER=parallel little-coder
+```
+
+Parallel provides free web search in Fast mode and extracts Markdown excerpts
+from pages, with no account or API key required. `webfetch`'s optional `prompt`
+focuses those excerpts (up to 200 characters). Responses are capped at 25K
+characters. Anonymous usage has service rate limits; errors are reported without
+silently switching providers. Queries and fetched URLs are sent to Parallel when
+you select it. Requests use an opaque conversation UUID, honor cancellation and
+a 30-second deadline. Custom pi session labels are never sent to Parallel.
+
+Leave the variable unset, or set it to `duckduckgo`, to use the original tools.
+The same setting is inherited by research sub-coders; existing tool permissions
+still apply. No Parallel credentials are read from the environment.
+
 ## Your project's AGENTS.md
 
 little-coder launches pi with `--no-context-files`, so *its* `AGENTS.md` is the system prompt rather than whatever happens to sit in the current directory. That is why the small-model adaptations hold in any repo, and until v1.20.0 it also meant your project's own `AGENTS.md` was ignored outright, so the model globbed the whole tree at the start of every run to work out where it was ([#104](https://github.com/itayinbarr/little-coder/issues/104)).

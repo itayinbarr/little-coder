@@ -40,6 +40,7 @@ describe("build-pi-package", () => {
 		);
 		expect(pkg.name, "package name").toBe("pi-little-coder");
 		expect(pkg.version, "package version matches root").toBe(rootPkg.version);
+		expect(pkg.dependencies["@modelcontextprotocol/sdk"]).toBe(rootPkg.dependencies["@modelcontextprotocol/sdk"]);
 
 		expect(Array.isArray(pkg.pi?.extensions), "pi.extensions is an array").toBe(true);
 		expect(pkg.pi.extensions.length, "pi.extensions is non-empty").toBeGreaterThan(0);

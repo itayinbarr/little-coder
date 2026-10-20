@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.83.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@sinclair/typebox": "^0.34.49",
     "playwright": "^1.59.1"
   },
